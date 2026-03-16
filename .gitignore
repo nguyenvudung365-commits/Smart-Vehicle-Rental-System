@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Environment
+.env
+.env.local
+*/.env
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build outputs
+backend/dist/
+mobile/.expo/
+mobile/dist/
+mobile/web-build/
+
+# Uploaded files (if saving locally)
+backend/uploads/
+
+# Database
+*.sqlite
+*.db
+
+# Prisma
+backend/prisma/migrations/dev.db*
+
+# Metro / Expo cache
+.metro-health-check*
+mobile/.expo-shared/
+
+# Mac
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
