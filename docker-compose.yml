@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mioto_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mioto_admin
+      POSTGRES_PASSWORD: mioto_secret_2025
+      POSTGRES_DB: mioto_clone
+    ports:
+      - "5432:5432"
+    volumes:
+      - mioto_pgdata:/var/lib/postgresql/data
+      - ./mioto_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mioto_admin -d mioto_clone"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: mioto_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@mioto.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - mioto_pgadmin_data:/var/lib/pgadmin
+
+  # MinIO — Object Storage S3-compatible cho anh (buoi 5)
+  # Truy cap:
+  #   API (SDK S3 backend goi):   http://localhost:9000
+  #   Console (web UI de xem):    http://localhost:9001
+  #   Login console: minio_admin / minio_secret_2025
+  minio:
+    image: minio/minio:latest
+    container_name: mioto_minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: minio_admin
+      MINIO_ROOT_PASSWORD: minio_secret_2025
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"   # API port (S3)
+      - "9001:9001"   # Web console
+    volumes:
+      - mioto_miniodata:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Init bucket "mioto-images" va set public-read policy (chay 1 lan roi thoat)
+  minio-init:
+    image: minio/mc:latest
+    container_name: mioto_minio_init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minio_admin minio_secret_2025;
+      mc mb --ignore-existing local/mioto-images;
+      mc anonymous set download local/mioto-images;
+      echo 'Bucket mioto-images ready (public-read)';
+      exit 0;
+      "
+
+volumes:
+  mioto_pgdata:
+  mioto_pgadmin_data:
+  mioto_miniodata:
