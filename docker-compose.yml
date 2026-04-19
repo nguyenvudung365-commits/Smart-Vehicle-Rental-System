@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mioto_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mioto_admin
+      POSTGRES_PASSWORD: mioto_secret_2025
+      POSTGRES_DB: mioto_clone
+    ports:
+      - "5432:5432"
+    volumes:
+      - mioto_pgdata:/var/lib/postgresql/data
+      - ./mioto_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mioto_admin -d mioto_clone"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: mioto_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@mioto.local
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - mioto_pgadmin_data:/var/lib/pgadmin
+
+volumes:
+  mioto_pgdata:
+  mioto_pgadmin_data:
