@@ -1,0 +1,144 @@
+// Prisma schema cho Mioto Clone
+// Map các ENUM sang snake_case để khớp với CREATE TYPE trong mioto_schema.sql
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  renter
+  host
+  admin
+
+  @@map("user_role")
+}
+
+enum VehicleStatus {
+  pending
+  approved
+  rejected
+  inactive
+
+  @@map("vehicle_status")
+}
+
+enum TransmissionType {
+  manual
+  automatic
+
+  @@map("transmission_type")
+}
+
+enum FuelType {
+  gasoline
+  diesel
+  electric
+  hybrid
+
+  @@map("fuel_type")
+}
+
+model User {
+  id            String    @id @default(uuid()) @db.Uuid
+  phone         String    @unique @db.VarChar(15)
+  email         String?   @unique @db.VarChar(100)
+  passwordHash  String    @map("password_hash") @db.VarChar(255)
+  fullName      String    @map("full_name") @db.VarChar(100)
+  avatarUrl     String?   @map("avatar_url") @db.VarChar(255)
+  birthday      DateTime? @db.Date
+  role          UserRole  @default(renter)
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  vehicles      Vehicle[] @relation("VehicleOwner")
+
+  @@map("users")
+}
+
+model Vehicle {
+  id             String           @id @default(uuid()) @db.Uuid
+  ownerId        String           @map("owner_id") @db.Uuid
+  addressId      String           @map("address_id") @db.Uuid
+  brand          String           @db.VarChar(50)
+  model          String           @db.VarChar(100)
+  year           Int
+  transmission   TransmissionType
+  fuelType       FuelType         @map("fuel_type")
+  seats          Int
+  licensePlate   String           @unique @map("license_plate") @db.VarChar(15)
+  pricePerDay    Decimal          @map("price_per_day") @db.Decimal(12, 2)
+  description    String?
+  status         VehicleStatus    @default(pending)
+  rejectReason   String?          @map("reject_reason")
+  isAvailable    Boolean          @default(true) @map("is_available")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  approvedAt     DateTime?        @map("approved_at")
+
+  owner          User             @relation("VehicleOwner", fields: [ownerId], references: [id])
+  address        Address          @relation(fields: [addressId], references: [id])
+  images         VehicleImage[]
+  features       VehicleFeature[]
+
+  @@index([status, isAvailable])
+  @@index([pricePerDay])
+  @@map("vehicles")
+}
+
+model VehicleImage {
+  id            String   @id @default(uuid()) @db.Uuid
+  vehicleId     String   @map("vehicle_id") @db.Uuid
+  imageUrl      String   @map("image_url") @db.VarChar(255)
+  isCover       Boolean  @default(false) @map("is_cover")
+  displayOrder  Int      @default(0) @map("display_order")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  vehicle       Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@map("vehicle_images")
+}
+
+model Address {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  label      String?   @db.VarChar(50)
+  province   String    @db.VarChar(50)
+  district   String    @db.VarChar(50)
+  ward       String    @db.VarChar(50)
+  detail     String?   @db.VarChar(255)
+  latitude   Decimal?  @db.Decimal(10, 7)
+  longitude  Decimal?  @db.Decimal(10, 7)
+  isDefault  Boolean   @default(false) @map("is_default")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  vehicles   Vehicle[]
+
+  @@map("addresses")
+}
+
+model Feature {
+  id        String           @id @default(uuid()) @db.Uuid
+  name      String           @unique @db.VarChar(100)
+  icon      String?          @db.VarChar(100)
+  category  String?          @db.VarChar(50)
+
+  vehicles  VehicleFeature[]
+
+  @@map("features")
+}
+
+model VehicleFeature {
+  vehicleId  String   @map("vehicle_id") @db.Uuid
+  featureId  String   @map("feature_id") @db.Uuid
+
+  vehicle    Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  feature    Feature  @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@id([vehicleId, featureId])
+  @@map("vehicle_features")
+}
