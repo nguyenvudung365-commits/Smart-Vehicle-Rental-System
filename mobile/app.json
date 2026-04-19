@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Mioto Clone",
+    "slug": "mioto-clone",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "scheme": "miotoclone",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.miotoclone.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#13B981"
+      },
+      "package": "com.miotoclone.app"
+    },
+    "plugins": ["expo-router"],
+    "extra": {
+      "apiUrl": "http://192.168.0.101:3000/api"
+    }
+  }
+}
