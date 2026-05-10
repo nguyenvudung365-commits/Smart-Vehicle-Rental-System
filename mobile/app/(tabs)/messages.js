@@ -9,6 +9,8 @@ import { conversationService } from '../../services/conversation.service';
 import { useAuth } from '../../contexts/AuthContext';
 import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../../constants/theme';
 import { showError } from '../../utils/toast';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 
 // ─── Thông báo ───────────────────────────────────────────────
 const TYPE_ICON = {
@@ -69,7 +71,8 @@ function NotificationsTab() {
   if (loading) return <ActivityIndicator color={COLORS.primary} style={{ marginTop: SPACING.xl }} />;
 
   return (
-    <FlatList
+    <SafeAreaView style={{flex:1}}>
+      <FlatList
       data={list}
       keyExtractor={item => item.id}
       contentContainerStyle={list.length === 0 && styles.emptyContainer}
@@ -108,6 +111,7 @@ function NotificationsTab() {
         );
       }}
     />
+  </SafeAreaView>
   );
 }
 

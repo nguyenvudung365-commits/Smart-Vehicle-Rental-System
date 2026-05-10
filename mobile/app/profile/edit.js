@@ -11,6 +11,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../contexts/AuthContext';
 import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../../constants/theme';
 import { showSuccess, showError } from '../../utils/toast';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 
 function fmtDate(iso) {
   if (!iso) return null;
@@ -90,8 +92,12 @@ export default function EditProfileScreen() {
     setShowBirthdayPicker(false);
     if (!date) return;
     setBirthday(date);
+    // Dùng local date để tránh lệch múi giờ khi dùng toISOString()
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
     try {
-      await updateUser({ birthday: date.toISOString().slice(0, 10) });
+      await updateUser({ birthday: `${y}-${m}-${d}` });
       showSuccess('Đã cập nhật ngày sinh');
     } catch {
       showError('Cập nhật thất bại');
@@ -105,7 +111,7 @@ export default function EditProfileScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
@@ -233,7 +239,7 @@ export default function EditProfileScreen() {
           />
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 

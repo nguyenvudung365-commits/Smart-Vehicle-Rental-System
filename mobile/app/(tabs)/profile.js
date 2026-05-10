@@ -1,28 +1,37 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
+import api from '../../services/api';
 import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../../constants/theme';
+import { showSuccess, showError } from '../../utils/toast';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 
 const ACCOUNT_ITEMS = [
-  { icon: 'person-outline',   label: 'Chỉnh sửa hồ sơ',         route: '/profile/edit' },
-  { icon: 'card-outline',     label: 'Giấy phép lái xe',         route: '/kyc/submit' },
-  { icon: 'wallet-outline',   label: 'Thẻ thanh toán',           route: '/card' },
-  { icon: 'star-outline',     label: 'Điểm thưởng & Ưu đãi',    route: '/profile/points' },
-  { icon: 'location-outline', label: 'Địa chỉ của tôi',          route: '/profile/addresses' },
-  { icon: 'people-outline',   label: 'Giới thiệu bạn bè',        route: '/profile/referral' },
+  { icon: 'person-outline',      label: 'Chỉnh sửa hồ sơ',       route: '/profile/edit' },
+  { icon: 'card-outline',        label: 'Giấy phép lái xe',       route: '/kyc/submit' },
+  { icon: 'wallet-outline',      label: 'Thẻ thanh toán',         route: '/card' },
+  { icon: 'star-outline',        label: 'Điểm thưởng & Ưu đãi',  route: '/profile/points' },
+  { icon: 'location-outline',    label: 'Địa chỉ của tôi',        route: '/profile/addresses' },
+  { icon: 'people-outline',      label: 'Giới thiệu bạn bè',      route: '/profile/referral' },
+  { icon: 'lock-closed-outline', label: 'Đổi mật khẩu',          route: '/profile/change-password' },
 ];
 
 const HOST_ITEMS = [
-  { icon: 'car-sport-outline', label: 'Xe của tôi', route: '/host/vehicles' },
-  { icon: 'add-circle-outline', label: 'Đăng ký xe mới', route: '/host/add-vehicle' },
+  { icon: 'car-sport-outline',   label: 'Xe của tôi',        route: '/host/vehicles' },
+  { icon: 'add-circle-outline',  label: 'Đăng ký xe mới',    route: '/host/add-vehicle' },
+  { icon: 'receipt-outline',     label: 'Đơn thuê xe',        route: '/host/bookings' },
+  { icon: 'bar-chart-outline',   label: 'Thống kê doanh thu', route: '/host/stats' },
 ];
 
 const ADMIN_ITEMS = [
-  { icon: 'shield-checkmark-outline', label: 'Duyệt KYC', route: '/admin/kyc' },
-  { icon: 'car-outline', label: 'Duyệt xe', route: '/admin/vehicles' },
+  { icon: 'bar-chart-outline',        label: 'Thống kê hệ thống',      route: '/admin/stats' },
+  { icon: 'shield-checkmark-outline', label: 'Duyệt KYC',              route: '/admin/kyc' },
+  { icon: 'car-outline',              label: 'Duyệt xe',               route: '/admin/vehicles' },
+  { icon: 'person-remove-outline',    label: 'Yêu cầu xóa tài khoản', route: '/admin/users' },
 ];
 
 function MenuSection({ title, items }) {
@@ -47,6 +56,8 @@ function MenuSection({ title, items }) {
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const isHost = user?.role === 'host';
   const isAdmin = user?.role === 'admin';
@@ -57,6 +68,19 @@ export default function ProfileScreen() {
     router.replace('/(auth)/login');
   }
 
+  async function doDeleteAccount() {
+    setDeleting(true);
+    try {
+      await api.delete('/auth/account');
+      setShowDeleteConfirm(false);
+      showSuccess('Đã gửi yêu cầu xóa tài khoản. Admin sẽ xử lý trong 1–3 ngày làm việc.');
+    } catch {
+      showError('Không thể gửi yêu cầu, vui lòng thử lại');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <ScrollView style={styles.container}>
       {/* Header */}
@@ -65,10 +89,10 @@ export default function ProfileScreen() {
           <TouchableOpacity onPress={() => router.push('/profile/edit')}>
             {user?.avatarUrl ? (
               <Image
-                source={user.avatarUrl}
+                source={{ uri: user.avatarUrl }}
                 style={styles.avatar}
                 contentFit="cover"
-                cachePolicy="memory-disk"
+                cachePolicy="none"
               />
             ) : (
               <View style={[styles.avatar, styles.avatarPlaceholder]}>
@@ -128,6 +152,37 @@ export default function ProfileScreen() {
         <Ionicons name="log-out-outline" size={22} color={COLORS.error} />
         <Text style={styles.logoutText}>Đăng xuất</Text>
       </TouchableOpacity>
+
+      {/* Xóa tài khoản */}
+      <TouchableOpacity style={styles.deleteBtn} onPress={() => setShowDeleteConfirm(true)}>
+        <Ionicons name="trash-outline" size={18} color={COLORS.textTertiary} />
+        <Text style={styles.deleteText}>Yêu cầu xóa tài khoản</Text>
+      </TouchableOpacity>
+
+      {/* Modal xác nhận xóa tài khoản */}
+      <Modal visible={showDeleteConfirm} transparent animationType="fade">
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmBox}>
+            <Ionicons name="warning-outline" size={40} color={COLORS.error} style={{ alignSelf: 'center', marginBottom: SPACING.sm }} />
+            <Text style={styles.confirmTitle}>Xóa tài khoản</Text>
+            <Text style={styles.confirmMsg}>
+              Tài khoản sẽ bị vô hiệu hóa ngay lập tức. Dữ liệu lịch sử sẽ được lưu giữ theo quy định. Bạn có chắc chắn muốn xóa?
+            </Text>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity style={styles.confirmCancel} onPress={() => setShowDeleteConfirm(false)}>
+                <Text style={styles.confirmCancelText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmOk, deleting && { opacity: 0.6 }]}
+                onPress={doDeleteAccount}
+                disabled={deleting}
+              >
+                <Text style={styles.confirmOkText}>{deleting ? 'Đang xử lý...' : 'Xóa tài khoản'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Modal xác nhận đăng xuất */}
       <Modal visible={showLogoutConfirm} transparent animationType="fade">
@@ -202,9 +257,14 @@ const styles = StyleSheet.create({
   becomeHostSub: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, marginTop: 2 },
   logoutBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm,
-    backgroundColor: COLORS.background, padding: SPACING.md, marginTop: SPACING.md, marginBottom: SPACING.xl,
+    backgroundColor: COLORS.background, padding: SPACING.md, marginTop: SPACING.md,
   },
   logoutText: { color: COLORS.error, fontSize: FONT_SIZE.md, fontWeight: '600' },
+  deleteBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs,
+    paddingVertical: SPACING.sm, marginBottom: SPACING.xl,
+  },
+  deleteText: { color: COLORS.textTertiary, fontSize: FONT_SIZE.sm },
   confirmOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   confirmBox: { backgroundColor: COLORS.background, borderRadius: RADIUS.lg, padding: SPACING.xl, width: '80%' },
   confirmTitle: { fontSize: FONT_SIZE.lg, fontWeight: 'bold', color: COLORS.text, marginBottom: SPACING.sm },

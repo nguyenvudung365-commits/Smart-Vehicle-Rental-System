@@ -8,12 +8,16 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as SecureStore from 'expo-secure-store';
 import { vehicleService } from '../../services/vehicle.service';
+import { useAuth } from '../../contexts/AuthContext';
 import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../../constants/theme';
 import { showSuccess, showError } from '../../utils/toast';
 import { formatPrice } from '../../utils/format';
 import SuggestionInput from '../../components/SuggestionInput';
 import MapPickerModal from '../../components/MapPickerModal';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 
 const FUEL_OPTIONS = [
   { value: 'gasoline', label: 'Xăng' },
@@ -30,6 +34,7 @@ const TRANSMISSION_OPTIONS = [
 const SEATS_OPTIONS = [4, 5, 7, 9, 16];
 
 export default function AddVehicleScreen() {
+  const { loadUser } = useAuth();
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [images, setImages] = useState([]);
@@ -195,6 +200,15 @@ export default function AddVehicleScreen() {
         return showError('Tạo xe thất bại');
       }
 
+      // Nếu role được nâng từ renter → host, lưu JWT mới ngay để
+      // các request tiếp theo (uploadImages, submitForReview) dùng đúng role
+      if (createResult.newAccessToken) {
+        await SecureStore.setItemAsync('accessToken', createResult.newAccessToken);
+        // Cập nhật header mặc định của axios
+        const { default: api } = await import('../../services/api');
+        api.defaults.headers.common['Authorization'] = `Bearer ${createResult.newAccessToken}`;
+      }
+
       const vehicleId = createResult.data.id;
 
       if (images.length > 0) {
@@ -212,6 +226,7 @@ export default function AddVehicleScreen() {
       await vehicleService.submitForReview(vehicleId);
 
       showSuccess('Đã đăng ký xe và gửi duyệt!');
+      await loadUser();
       router.replace('/host/vehicles');
     } catch (err) {
       showError(err.response?.data?.message || 'Đăng ký xe thất bại');

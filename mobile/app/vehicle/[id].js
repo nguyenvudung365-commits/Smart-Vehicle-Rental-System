@@ -15,6 +15,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../../constants/theme';
 import { showError } from '../../utils/toast';
 import MapPickerModal from '../../components/MapPickerModal';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 
 const { width } = Dimensions.get('window');
 
@@ -114,6 +116,7 @@ export default function VehicleDetailScreen() {
   const [isFavorited, setIsFavorited] = useState(false);
   const [chatLoading, setChatLoading] = useState(false);
   const [mapModal, setMapModal] = useState(false);
+  const [bookedRanges, setBookedRanges] = useState([]);
 
   async function handleChat() {
     if (!vehicle?.owner?.id) return;
@@ -138,10 +141,11 @@ export default function VehicleDetailScreen() {
 
   async function load() {
     try {
-      const [vehicleResult, reviewResult, favResult] = await Promise.all([
+      const [vehicleResult, reviewResult, favResult, bookedResult] = await Promise.all([
         vehicleService.getById(id),
         reviewService.getByVehicle(id).catch(() => ({ success: true, data: { averageRating: 0, totalReviews: 0, reviews: [] } })),
         favoriteService.check(id).catch(() => ({ data: { isFavorited: false } })),
+        vehicleService.getBookedDates(id).catch(() => ({ success: false, data: [] })),
       ]);
       if (vehicleResult.success) {
         setVehicle(vehicleResult.data);
@@ -160,6 +164,12 @@ export default function VehicleDetailScreen() {
         setReviewData(reviewResult.data);
       }
       if (favResult?.data) setIsFavorited(favResult.data.isFavorited);
+      if (bookedResult?.success && bookedResult.data?.length) {
+        setBookedRanges(bookedResult.data.map(r => ({
+          start: new Date(r.startDate),
+          end: new Date(r.endDate),
+        })));
+      }
     } catch (err) {
       showError(err.response?.data?.message || 'Không tải được thông tin xe');
     } finally {
@@ -410,6 +420,24 @@ export default function VehicleDetailScreen() {
             </TouchableOpacity>
           </View>
 
+          {/* Lịch xe đã đặt */}
+          {bookedRanges.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Ngày xe đã được đặt</Text>
+              <Text style={styles.description}>Xe không khả dụng trong các khoảng thời gian sau:</Text>
+              {bookedRanges.map((r, i) => (
+                <View key={i} style={styles.bookedRangeRow}>
+                  <Ionicons name="close-circle" size={16} color={COLORS.error} />
+                  <Text style={styles.bookedRangeText}>
+                    {r.start.getDate().toString().padStart(2,'0')}/{(r.start.getMonth()+1).toString().padStart(2,'0')}/{r.start.getFullYear()}
+                    {' — '}
+                    {r.end.getDate().toString().padStart(2,'0')}/{(r.end.getMonth()+1).toString().padStart(2,'0')}/{r.end.getFullYear()}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+
           {/* Phụ phí */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Phụ phí có thể phát sinh</Text>
@@ -440,7 +468,7 @@ export default function VehicleDetailScreen() {
 
       {/* Sticky bottom */}
       <View style={styles.bottomBar}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.priceLabel}>Giá thuê</Text>
           <Text style={styles.priceValue}>
             {new Intl.NumberFormat('vi-VN').format(vehicle.pricePerDay)}đ{' '}
@@ -651,6 +679,8 @@ const styles = StyleSheet.create({
   avgRatingText: { fontSize: FONT_SIZE.md, fontWeight: '700', color: COLORS.text },
   totalReviewsText: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary },
   noReviewText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.sm },
+  bookedRangeRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginTop: SPACING.xs },
+  bookedRangeText: { fontSize: FONT_SIZE.sm, color: COLORS.error },
   reviewCard: {
     flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.md,
     borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md,
@@ -680,29 +710,30 @@ const styles = StyleSheet.create({
 
   // Bottom bar
   bottomBar: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    padding: SPACING.lg, backgroundColor: COLORS.background,
+    flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
+    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.background,
     borderTopWidth: 1, borderTopColor: COLORS.border,
   },
   priceLabel: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary },
-  priceValue: { fontSize: FONT_SIZE.lg, fontWeight: 'bold', color: COLORS.primary },
-  priceUnit: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary, fontWeight: 'normal' },
+  priceValue: { fontSize: FONT_SIZE.md, fontWeight: 'bold', color: COLORS.primary },
+  priceUnit: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, fontWeight: 'normal' },
   heartBtnBar: {
-    width: 44, height: 44, borderRadius: 22,
+    width: 40, height: 40, borderRadius: 20,
     borderWidth: 1, borderColor: COLORS.border,
     justifyContent: 'center', alignItems: 'center',
   },
   chatBtn: {
-    width: 44, height: 44, borderRadius: 22,
+    width: 40, height: 40, borderRadius: 20,
     borderWidth: 1.5, borderColor: COLORS.primary,
     justifyContent: 'center', alignItems: 'center',
   },
   bookBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
-    backgroundColor: COLORS.primary, paddingHorizontal: SPACING.xl,
-    paddingVertical: SPACING.md, borderRadius: RADIUS.md,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: COLORS.primary, paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm, borderRadius: RADIUS.md,
   },
-  bookBtnText: { color: '#FFF', fontSize: FONT_SIZE.md, fontWeight: '600' },
+  bookBtnText: { color: '#FFF', fontSize: FONT_SIZE.sm, fontWeight: '600' },
 
   // Modal
   modalContainer: { flex: 1, backgroundColor: COLORS.background },

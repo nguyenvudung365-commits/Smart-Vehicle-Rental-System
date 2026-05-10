@@ -11,6 +11,8 @@ import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../../constants/theme';
 import { showSuccess, showError } from '../../utils/toast';
 import { Ionicons } from '@expo/vector-icons';
 import SuggestionInput from '../../components/SuggestionInput';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 
 export default function KycSubmitScreen() {
   const [kyc, setKyc] = useState(null);
@@ -21,6 +23,12 @@ export default function KycSubmitScreen() {
   const [licenseNumber, setLicenseNumber] = useState('');
   const [fullName, setFullName] = useState('');
   const [errors, setErrors] = useState({});
+
+  // CCCD (tùy chọn)
+  const [cccdNumber, setCccdNumber] = useState('');
+  const [cccdFrontImage, setCccdFrontImage] = useState(null);
+  const [cccdBackImage, setCccdBackImage] = useState(null);
+  const [showCccd, setShowCccd] = useState(false);
 
   // Modal chọn nguồn ảnh
   const [showImageSource, setShowImageSource] = useState(false);
@@ -105,6 +113,22 @@ export default function KycSubmitScreen() {
         type: backImage.mimeType || 'image/jpeg',
         name: 'back.jpg',
       });
+      // CCCD nếu người dùng chọn cung cấp
+      if (cccdNumber) formData.append('cccdNumber', cccdNumber);
+      if (cccdFrontImage) {
+        formData.append('cccdFront', {
+          uri: cccdFrontImage.uri,
+          type: cccdFrontImage.mimeType || 'image/jpeg',
+          name: 'cccd_front.jpg',
+        });
+      }
+      if (cccdBackImage) {
+        formData.append('cccdBack', {
+          uri: cccdBackImage.uri,
+          type: cccdBackImage.mimeType || 'image/jpeg',
+          name: 'cccd_back.jpg',
+        });
+      }
 
       const result = await kycService.submit(formData);
       if (result.success) {
@@ -132,6 +156,7 @@ export default function KycSubmitScreen() {
     const st = statusMap[kyc.status] || statusMap.pending;
 
     return (
+      <SafeAreaView style={{flex:1}}>
       <ScrollView keyboardShouldPersistTaps="handled" style={styles.container} contentContainerStyle={{ padding: SPACING.lg }}>
         <View style={[styles.statusCard, { borderColor: st.color }]}>
           <Ionicons name={st.icon} size={48} color={st.color} />
@@ -148,6 +173,7 @@ export default function KycSubmitScreen() {
           </TouchableOpacity>
         )}
       </ScrollView>
+      </SafeAreaView>
     );
   }
 
@@ -205,6 +231,55 @@ export default function KycSubmitScreen() {
           </View>
         )}
       </TouchableOpacity>
+
+      {/* CCCD — tùy chọn */}
+      <TouchableOpacity style={styles.cccdToggle} onPress={() => setShowCccd(v => !v)}>
+        <Ionicons name={showCccd ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.primary} />
+        <Text style={styles.cccdToggleText}>
+          {showCccd ? 'Ẩn phần CCCD' : 'Thêm CCCD (tùy chọn — tăng tỷ lệ duyệt)'}
+        </Text>
+      </TouchableOpacity>
+      {showCccd && (
+        <View style={styles.cccdSection}>
+          <Text style={styles.cccdNote}>Cung cấp CCCD để admin duyệt nhanh hơn</Text>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Số CCCD</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="12 số CCCD"
+              value={cccdNumber}
+              onChangeText={setCccdNumber}
+              keyboardType="numeric"
+              maxLength={12}
+            />
+          </View>
+
+          <Text style={styles.label}>Ảnh mặt trước CCCD</Text>
+          <TouchableOpacity style={styles.imagePicker} onPress={() => openImageSource(setCccdFrontImage)}>
+            {cccdFrontImage ? (
+              <Image source={cccdFrontImage.uri} style={styles.previewImage} contentFit="cover" />
+            ) : (
+              <View style={styles.imagePlaceholder}>
+                <Ionicons name="card-outline" size={32} color={COLORS.textSecondary} />
+                <Text style={styles.imagePickerText}>Chọn ảnh mặt trước CCCD</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <Text style={styles.label}>Ảnh mặt sau CCCD</Text>
+          <TouchableOpacity style={styles.imagePicker} onPress={() => openImageSource(setCccdBackImage)}>
+            {cccdBackImage ? (
+              <Image source={cccdBackImage.uri} style={styles.previewImage} contentFit="cover" />
+            ) : (
+              <View style={styles.imagePlaceholder}>
+                <Ionicons name="card-outline" size={32} color={COLORS.textSecondary} />
+                <Text style={styles.imagePickerText}>Chọn ảnh mặt sau CCCD</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
 
       <TouchableOpacity
         style={[styles.submitBtn, submitting && { opacity: 0.6 }]}
@@ -279,6 +354,19 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.md, alignItems: 'center',
   },
   retryBtnText: { color: '#FFF', fontSize: FONT_SIZE.md, fontWeight: '600' },
+  cccdToggle: {
+    flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
+    backgroundColor: COLORS.primaryLight + '20', borderRadius: RADIUS.md,
+    borderWidth: 1, borderColor: COLORS.primary + '40',
+    padding: SPACING.md, marginTop: SPACING.md, marginBottom: SPACING.sm,
+  },
+  cccdToggleText: { fontSize: FONT_SIZE.sm, color: COLORS.primary, fontWeight: '600', flex: 1 },
+  cccdSection: {
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.md,
+    borderWidth: 1, borderColor: COLORS.border, padding: SPACING.md, marginBottom: SPACING.md,
+  },
+  cccdNote: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, marginBottom: SPACING.sm },
+
   // Modal chọn nguồn ảnh
   sourceOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   sourceSheet: {

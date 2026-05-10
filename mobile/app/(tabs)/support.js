@@ -8,6 +8,8 @@ const SCREEN_W = Dimensions.get('window').width;
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../../constants/theme';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 
 const HOTLINE = '19009217';
 
@@ -63,7 +65,7 @@ export default function SupportScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Banner minh hoạ */}
         <View style={styles.banner}>
@@ -175,7 +177,7 @@ export default function SupportScreen() {
           </ScrollView>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 

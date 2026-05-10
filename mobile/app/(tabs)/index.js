@@ -12,6 +12,8 @@ import { VehicleCard } from '../../components/VehicleCard';
 import { getRecentlyViewed, clearRecentlyViewed } from '../../utils/recentlyViewed';
 import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../../constants/theme';
 import { showError } from '../../utils/toast';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 
 const { width: SW } = Dimensions.get('window');
 const BANNER_W = SW * 0.72;
@@ -133,7 +135,7 @@ export default function HomeScreen() {
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <SafeAreaView style={{ flex: 1 }}>
     <ScrollView
       style={styles.container}
       showsVerticalScrollIndicator={false}
@@ -381,7 +383,7 @@ export default function HomeScreen() {
           </ScrollView>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
