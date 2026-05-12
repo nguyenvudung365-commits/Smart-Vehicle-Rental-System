@@ -12,6 +12,12 @@ async function createVehicle(ownerId, data) {
   const { province, district, ward, detail, latitude, longitude, featureIds, ...vehicleData } = data;
 
   return await prisma.$transaction(async (tx) => {
+    // Neu la renter, tu dong nang cap len host
+    const owner = await tx.user.findUnique({ where: { id: ownerId }, select: { role: true } });
+    if (owner?.role === 'renter') {
+      await tx.user.update({ where: { id: ownerId }, data: { role: 'host' } });
+    }
+
     // Tao address truoc (co the co toa do GPS)
     const address = await tx.address.create({
       data: {
@@ -81,7 +87,7 @@ async function updateVehicle(vehicleId, ownerId, data) {
     include: { address: true },
   });
   if (!vehicle) {
-    const err = new Error('Khong tim thay xe hoac ban khong phai chu xe');
+    const err = new Error('Không tìm thấy xe hoặc bạn không phải chủ xe');
     err.status = 404;
     throw err;
   }
@@ -140,7 +146,7 @@ async function toggleAvailability(vehicleId, ownerId) {
     where: { id: vehicleId, ownerId },
   });
   if (!vehicle) {
-    const err = new Error('Khong tim thay xe');
+    const err = new Error('Không tìm thấy xe');
     err.status = 404;
     throw err;
   }
@@ -163,7 +169,7 @@ async function submitForReview(vehicleId, ownerId) {
     include: { images: true },
   });
   if (!vehicle) {
-    const err = new Error('Khong tim thay xe');
+    const err = new Error('Không tìm thấy xe');
     err.status = 404;
     throw err;
   }
@@ -191,7 +197,7 @@ async function deleteVehicle(vehicleId, ownerId) {
     include: { images: true },
   });
   if (!vehicle) {
-    const err = new Error('Khong tim thay xe');
+    const err = new Error('Không tìm thấy xe');
     err.status = 404;
     throw err;
   }
@@ -226,7 +232,7 @@ async function addVehicleImages(vehicleId, ownerId, files) {
     include: { images: true },
   });
   if (!vehicle) {
-    const err = new Error('Khong tim thay xe');
+    const err = new Error('Không tìm thấy xe');
     err.status = 404;
     throw err;
   }
@@ -262,7 +268,7 @@ async function deleteVehicleImage(vehicleId, imageId, ownerId) {
     },
   });
   if (!image) {
-    const err = new Error('Khong tim thay anh');
+    const err = new Error('Không tìm thấy ảnh');
     err.status = 404;
     throw err;
   }
@@ -279,6 +285,7 @@ async function search({
   fuelType,
   minPrice,
   maxPrice,
+  seats,            // exact match so cho
   minSeats,
   maxSeats,
   yearFrom,
@@ -288,6 +295,8 @@ async function search({
   minKmLimit,       // gioi han km/ngay toi thieu
   maxFuelConsumption, // tieu hao nhien lieu toi da (L/100km)
   maxOverageFee,    // phi vuot km toi da (VND/km)
+  availableFrom,    // loc xe trong khoang ngay trong
+  availableTo,
   sortBy = 'created_at',
   order = 'desc',
   page = 1,
@@ -295,10 +304,11 @@ async function search({
 }) {
   const skip = (page - 1) * limit;
 
-  // Xay dung dieu kien WHERE
+  // Xây dựng điều kiện WHERE động — chỉ thêm điều kiện khi có tham số
   const where = {
-    status: 'approved',
-    isAvailable: true,
+    status: 'approved',       // Chỉ xe đã được admin duyệt
+    isAvailable: true,        // Chỉ xe đang mở cho thuê
+    owner: { isActive: true }, // Ẩn xe của tài khoản đã bị vô hiệu hóa
   };
 
   if (province) {
@@ -307,8 +317,10 @@ async function search({
   if (transmission) where.transmission = transmission;
   if (fuelType) where.fuelType = fuelType;
 
-  // So cho: khoang min-max
-  if (minSeats || maxSeats) {
+  // So cho: exact match hoac khoang min-max
+  if (seats) {
+    where.seats = parseInt(seats);
+  } else if (minSeats || maxSeats) {
     where.seats = {};
     if (minSeats) where.seats.gte = parseInt(minSeats);
     if (maxSeats) where.seats.lte = parseInt(maxSeats);
@@ -333,12 +345,16 @@ async function search({
     where.brand = { contains: brand, mode: 'insensitive' };
   }
 
-  // Tinh nang: xe phai co TAT CA tinh nang duoc chon
-  if (featureIds && featureIds.length > 0) {
-    const ids = Array.isArray(featureIds) ? featureIds : [featureIds];
-    where.features = {
-      some: { featureId: { in: ids } },
-    };
+  // Tính năng: lọc xe có ít nhất 1 trong các tính năng được chọn
+  if (featureIds) {
+    // Frontend gửi dạng chuỗi "id1,id2" thay vì mảng vì axios 1.x
+    // serialize mảng thành "featureIds[]=id1&featureIds[]=id2" gây lỗi parse
+    const ids = typeof featureIds === 'string'
+      ? featureIds.split(',').filter(Boolean)
+      : Array.isArray(featureIds) ? featureIds : [featureIds];
+    if (ids.length > 0) {
+      where.features = { some: { featureId: { in: ids } } };
+    }
   }
 
   // Tieu hao nhien lieu toi da (chi ap dung khi xe co khai bao fuelConsumption)
@@ -362,13 +378,26 @@ async function search({
     ];
   }
 
+  // Loc xe trong theo khoang ngay: loai xe co booking chong lap
+  if (availableFrom && availableTo) {
+    const start = new Date(availableFrom);
+    const end = new Date(availableTo);
+    where.bookings = {
+      none: {
+        status: { in: ['pending_payment', 'confirmed', 'in_progress'] },
+        AND: [{ startDate: { lte: end } }, { endDate: { gte: start } }],
+      },
+    };
+  }
+
   // Sap xep
   const orderBy = {};
   if (sortBy === 'price') orderBy.pricePerDay = order;
   else if (sortBy === 'year') orderBy.year = order;
   else orderBy.createdAt = order;
 
-  // Query song song count + data
+  // Chạy 2 query song song: đếm tổng để phân trang + lấy dữ liệu trang hiện tại
+  // Promise.all nhanh hơn await tuần tự vì cả 2 query chạy cùng lúc
   const [total, vehicles] = await Promise.all([
     prisma.vehicle.count({ where }),
     prisma.vehicle.findMany({

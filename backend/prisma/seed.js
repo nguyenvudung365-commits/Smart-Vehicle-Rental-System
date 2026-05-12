@@ -23,16 +23,20 @@ async function main() {
   await prisma.pointHistory.deleteMany({});
   await prisma.notification.deleteMany({});
   await prisma.favorite.deleteMany({});
+  await prisma.hostReview.deleteMany({});   // mới
   await prisma.review.deleteMany({});
   await prisma.vehicleFeature.deleteMany({});
   await prisma.vehicleImage.deleteMany({});
+  await prisma.blockedRenter.deleteMany({}); // mới
   await prisma.booking.deleteMany({});
+  await prisma.voucher.deleteMany({});       // mới
   await prisma.paymentCard.deleteMany({});
   await prisma.kyc.deleteMany({});
   await prisma.vehicle.deleteMany({});
   await prisma.address.deleteMany({});
   await prisma.feature.deleteMany({});
   await prisma.user.deleteMany({});
+  await prisma.systemConfig.deleteMany({});  // mới
   console.log('🗑️  Đã xóa sạch\n');
 
   // ══════════════════════════════════════════════
@@ -340,7 +344,62 @@ async function main() {
     status: 'confirmed', cardLast4: '3344', createdAt: d(-1),
   }});
 
-  console.log('✅ 8 booking (completed×3, in_progress, confirmed, cancelled + 2 của user khác thuê xe host)');
+  console.log('✅ 8 booking cơ bản (completed×3, in_progress, confirmed, cancelled + 2 của user khác)');
+
+  // ══════════════════════════════════════════════
+  // BOOKING CÓ VOUCHER — Demo mã giảm giá
+  // ══════════════════════════════════════════════
+  // Cần tạo voucher trước (sẽ upsert ở dưới), tạm tạo inline ở đây
+  const voucherDemo = await prisma.voucher.upsert({
+    where: { code: 'SUMMER20' },
+    update: {},
+    create: {
+      code: 'SUMMER20',
+      discountType: 'percent',
+      discountValue: 20,
+      maxDiscount: 300000,
+      minOrderValue: 1000000,
+      usageLimit: 100,
+      usedCount: 38,
+      expiresAt: new Date('2026-08-31'),
+      isActive: true,
+    },
+  });
+
+  const bWithVoucher = await prisma.booking.create({ data: {
+    renterId: renter.id,
+    vehicleId: v2.id,     // Honda City
+    voucherId: voucherDemo.id,
+    startDate: d(-45, 8), endDate: d(-42, 20), rentalDays: 3,
+    pricePerDay: 950000,
+    subtotal: 2850000,
+    discountAmount: 0,       // không dùng điểm
+    voucherDiscount: 300000, // SUMMER20 giảm 20% nhưng tối đa 300K
+    totalAmount: 2550000,
+    status: 'completed',
+    cardLast4: '9123',
+    createdAt: d(-47),
+  }});
+
+  // Host đánh giá cho booking có voucher này
+  await prisma.hostReview.create({ data: {
+    bookingId: bWithVoucher.id,
+    hostId: host.id,
+    renterId: renter.id,
+    rating: 5,
+    comment: 'Khách ổn, xe trả sạch sẽ và đúng giờ. Đây là lần thứ 4 Lan thuê xe của anh, rất tin tưởng.',
+  }});
+
+  // Renter cũng review xe này
+  await prisma.review.create({ data: {
+    bookingId: bWithVoucher.id,
+    renterId: renter.id,
+    vehicleId: v2.id,
+    rating: 4,
+    comment: 'Honda City RS đi khá ổn, Honda Sensing tiện lợi. Lần này dùng mã SUMMER20 giảm được 300K, tiết kiệm lắm!',
+  }});
+
+  console.log('✅ 1 booking mẫu dùng voucher SUMMER20 (Honda City, giảm 300K) + review 2 chiều');
 
   // ══════════════════════════════════════════════
   // ĐÁNH GIÁ — Renter viết sau completed booking
@@ -363,7 +422,46 @@ async function main() {
     comment: 'CX-5 đỉnh quá! Đi Ninh Bình 2 ngày cực thích. Xe mạnh, bám đường tốt, cabin cách âm tốt. Host rất dễ tính.',
   }});
 
-  console.log('✅ 4 đánh giá (renter viết 3, r2 viết 1)');
+  console.log('✅ 4 đánh giá renter (renter viết 3, r2 viết 1)');
+
+  // ══════════════════════════════════════════════
+  // HOST REVIEW — Host đánh giá khách thuê (đánh giá 2 chiều)
+  // ══════════════════════════════════════════════
+  await prisma.hostReview.createMany({ data: [
+    {
+      bookingId: bCompleted1.id,
+      hostId: host.id,
+      renterId: renter.id,
+      rating: 5,
+      comment: 'Trần Thị Lan là khách thuê rất tốt. Trả xe đúng giờ, xe sạch sẽ, đổ xăng đầy bình. Giao tiếp lịch sự và thân thiện. Sẵn sàng cho thuê lần sau!',
+    },
+    {
+      bookingId: bCompleted3.id,
+      hostId: host.id,
+      renterId: renter.id,
+      rating: 5,
+      comment: 'Lan thuê Vios lần này cũng rất ổn. Xe được giữ gìn cẩn thận, trả đúng hẹn. Khách hàng thân thiết đáng tin cậy.',
+    },
+    {
+      bookingId: bR2.id,
+      hostId: host.id,
+      renterId: r2.id,
+      rating: 4,
+      comment: 'Lê Văn Bình giao tiếp tốt, xe trả ổn. Trừ 1 sao vì trả xe trễ hơn hẹn 30 phút, cần cải thiện việc đúng giờ.',
+    },
+  ]});
+  console.log('✅ 3 host review (host đánh giá khách — đánh giá 2 chiều)');
+
+  // ══════════════════════════════════════════════
+  // BLOCKED RENTER — Host chặn khách
+  // ══════════════════════════════════════════════
+  // host2 chặn r3 (ví dụ khách từng gây rắc rối)
+  await prisma.blockedRenter.create({ data: {
+    hostId: host2.id,
+    renterId: r3.id,
+    reason: 'Khách trả xe trễ 2 tiếng, không báo trước, gây ảnh hưởng đến chuyến khác.',
+  }});
+  console.log('✅ 1 blocked renter (host2 chặn r3 — demo chức năng chặn khách)');
 
   // ══════════════════════════════════════════════
   // YÊU THÍCH — Renter
@@ -467,6 +565,66 @@ async function main() {
   console.log('✅ 3 cuộc hội thoại với 24 tin nhắn thực tế');
 
   // ══════════════════════════════════════════════
+  // SYSTEM CONFIG — Phí nền tảng
+  // ══════════════════════════════════════════════
+  await prisma.systemConfig.create({ data: { key: 'platform_fee_rate', value: '0.20' } });
+  console.log('✅ SystemConfig: platform_fee_rate = 20%');
+
+  // ══════════════════════════════════════════════
+  // VOUCHERS — Mã giảm giá mẫu (upsert vì SUMMER20 đã tạo ở trên)
+  // ══════════════════════════════════════════════
+  const voucherDefs = [
+    {
+      code: 'WELCOME100K',
+      discountType: 'fixed',
+      discountValue: 100000,
+      minOrderValue: 500000,
+      usageLimit: 50,
+      usedCount: 12,
+      expiresAt: new Date('2026-12-31'),
+      isActive: true,
+    },
+    {
+      code: 'SUMMER20',
+      discountType: 'percent',
+      discountValue: 20,
+      maxDiscount: 300000,
+      minOrderValue: 1000000,
+      usageLimit: 100,
+      usedCount: 39, // 38 trước + 1 lần dùng trong booking demo
+      expiresAt: new Date('2026-08-31'),
+      isActive: true,
+    },
+    {
+      code: 'VIP500K',
+      discountType: 'fixed',
+      discountValue: 500000,
+      minOrderValue: 3000000,
+      usageLimit: 20,
+      usedCount: 5,
+      expiresAt: new Date('2026-06-30'),
+      isActive: true,
+    },
+    {
+      code: 'EXPIRED10',
+      discountType: 'percent',
+      discountValue: 10,
+      usageLimit: null,
+      usedCount: 0,
+      expiresAt: new Date('2025-01-01'), // Đã hết hạn — để demo
+      isActive: false,
+    },
+  ];
+  for (const v of voucherDefs) {
+    await prisma.voucher.upsert({
+      where: { code: v.code },
+      create: v,
+      update: v,
+    });
+  }
+  console.log('✅ 4 vouchers mẫu (WELCOME100K, SUMMER20, VIP500K, EXPIRED10)');
+
+  // ══════════════════════════════════════════════
   // TỔNG KẾT
   // ══════════════════════════════════════════════
   console.log('\n' + '═'.repeat(65));
@@ -508,11 +666,21 @@ async function main() {
   console.log('│  Lịch sử điểm: +30+440-100+152+280-482 = 320pt ✓       │');
   console.log('└─────────────────────────────────────────────────────────┘');
 
-  console.log('\n📌 TÀI KHOẢN PHỤ (thuê xe để host thấy booking):');
-  console.log('   0900000005 | Lê Văn Bình  — đặt CX-5 completed, đang chat với host');
-  console.log('   0900000006 | Nguyễn Thị Mai — đặt VF8 confirmed, đang chat với host');
+  console.log('\n📌 TÀI KHOẢN PHỤ:');
+  console.log('   0900000005 | Lê Văn Bình  — đặt CX-5 completed, host đánh giá 4⭐, đang chat');
+  console.log('   0900000006 | Nguyễn Thị Mai — đặt VF8 confirmed, bị host2 chặn, đang chat');
+  console.log('   0900000003 | Trần Minh Tuấn (host2) — chặn Nguyễn Thị Mai');
   console.log('   0900000014 | Nguyễn Minh Tùng — KYC pending');
-  console.log('   0900000015 | Đỗ Thị Linh — KYC pending\n');
+  console.log('   0900000015 | Đỗ Thị Linh — KYC pending');
+  console.log('\n🎫 VOUCHER MẪU:');
+  console.log('   WELCOME100K  — Giảm 100.000đ, đơn từ 500K, còn 38 lượt');
+  console.log('   SUMMER20     — Giảm 20% (tối đa 300K), đơn từ 1 triệu, hết hạn 31/8/2026');
+  console.log('   VIP500K      — Giảm 500.000đ, đơn từ 3 triệu, còn 15 lượt');
+  console.log('   EXPIRED10    — Đã hết hạn (để test validate)');
+  console.log('\n🔥 TÍNH NĂNG MỚI CÓ DỮ LIỆU DEMO:');
+  console.log('   HostReview: host đánh giá Trần Thị Lan (5⭐×3), Lê Văn Bình (4⭐)');
+  console.log('   BlockedRenter: host2 (Trần Minh Tuấn) chặn Nguyễn Thị Mai');
+  console.log('   Voucher booking: Honda City dùng SUMMER20 giảm 300.000đ\n');
 }
 
 main()
