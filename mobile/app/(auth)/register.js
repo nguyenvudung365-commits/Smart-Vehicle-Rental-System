@@ -9,10 +9,12 @@ import { useAuth } from '../../contexts/AuthContext';
 import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../../constants/theme';
 import { showError } from '../../utils/toast';
 import SuggestionInput from '../../components/SuggestionInput';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 
 export default function RegisterScreen() {
   const { register } = useAuth();
-  const [form, setForm] = useState({ phone: '', email: '', password: '', fullName: '' });
+  const [form, setForm] = useState({ phone: '', email: '', password: '', fullName: '', referralCode: '' });
   const [confirmPassword, setConfirmPassword] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -73,6 +75,8 @@ export default function RegisterScreen() {
     try {
       const payload = { ...form };
       if (!payload.email) delete payload.email;
+      if (!payload.referralCode) delete payload.referralCode;
+      else payload.referralCode = payload.referralCode.toUpperCase();
       const result = await register(payload);
       if (result.success) {
         router.replace('/(tabs)');
@@ -85,7 +89,8 @@ export default function RegisterScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
+    <SafeAreaView style={{flex:1}}>
+      <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: COLORS.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
@@ -178,6 +183,24 @@ export default function RegisterScreen() {
           {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
         </View>
 
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Mã giới thiệu (tùy chọn)</Text>
+          <SuggestionInput
+            fieldKey="register_referralCode"
+            containerStyle={styles.inputWrapper}
+            leftElement={<Ionicons name="gift-outline" size={20} color={COLORS.textSecondary} />}
+            style={styles.input}
+            placeholder="Nhập mã nếu có"
+            value={form.referralCode}
+            onChangeText={v => setField('referralCode', v.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+            autoCapitalize="characters"
+            maxLength={10}
+          />
+          <Text style={{ fontSize: 11, color: COLORS.textTertiary, marginTop: 4 }}>
+            Nhập mã của người giới thiệu để cả hai nhận điểm thưởng
+          </Text>
+        </View>
+
         <TouchableOpacity style={styles.checkbox} onPress={() => setAgreed(!agreed)}>
           <Ionicons
             name={agreed ? 'checkbox' : 'square-outline'}
@@ -212,6 +235,7 @@ export default function RegisterScreen() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 

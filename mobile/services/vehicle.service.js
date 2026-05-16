@@ -70,4 +70,10 @@ export const vehicleService = {
     const { data } = await api.delete(`/vehicles/${vehicleId}/images/${imageId}`);
     return data;
   },
+
+  // Lay cac khoang ngay da dat cua 1 xe
+  async getBookedDates(id) {
+    const { data } = await api.get(`/vehicles/${id}/booked-dates`);
+    return data;
+  },
 };

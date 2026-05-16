@@ -1,21 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, TextInput, Modal, Platform, FlatList,
+  ActivityIndicator, TextInput, Modal, Platform, FlatList, KeyboardAvoidingView,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { bookingService } from '../../services/booking.service';
 import { cardService } from '../../services/card.service';
 import { pointsService } from '../../services/points.service';
 import { addressService } from '../../services/address.service';
+import { vehicleService } from '../../services/vehicle.service';
+import { voucherService } from '../../services/voucher.service';
 import { useAuth } from '../../contexts/AuthContext';
 import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../../constants/theme';
 import { showSuccess, showError } from '../../utils/toast';
 import { formatPrice } from '../../utils/format';
 import MapPickerModal from '../../components/MapPickerModal';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 
 const INSURANCE_RATE = 0.09;  // 9% bảo hiểm thuê xe
 const DEPOSIT_RATE   = 0.40;  // 40% thanh toán giữ chỗ
@@ -90,11 +94,19 @@ export default function CreateBookingScreen() {
   const [pointsBalance, setPointsBalance] = useState(0);
   const [usePoints, setUsePoints]       = useState(false);
   const [deliveryOption, setDeliveryOption] = useState('pickup'); // 'pickup' | 'delivery'
-  const [selectedAddress, setSelectedAddress] = useState(null); // { label, province, district, ward, detail, latitude, longitude }
+  const [selectedAddress, setSelectedAddress] = useState(null);
   const [myAddresses, setMyAddresses] = useState([]);
   const [showAddrModal, setShowAddrModal] = useState(false);
   const [vehicleMapModal, setVehicleMapModal] = useState(false);
+  const [bookedRanges, setBookedRanges] = useState([]);
+  const [dateConflict, setDateConflict] = useState(false);
   const FEE_PER_KM = 5000;
+
+  // Voucher
+  const [voucherCode, setVoucherCode] = useState('');
+  const [voucherData, setVoucherData] = useState(null); // { id, code, discountAmount }
+  const [voucherLoading, setVoucherLoading] = useState(false);
+  const [showVoucherInput, setShowVoucherInput] = useState(false);
 
   // Tính toán giá
   const diffMs    = Math.max(endDate.getTime() - startDate.getTime(), 0);
@@ -108,7 +120,8 @@ export default function CreateBookingScreen() {
   const usablePoints      = Math.min(pointsBalance, maxPointsDiscount);
   const pointsDiscountVnd = usePoints ? usablePoints * 1000 : 0;
 
-  const discount    = usePromo && !usePoints ? DISCOUNT_PROMO : pointsDiscountVnd;
+  const voucherDiscountVnd = voucherData?.discountAmount || 0;
+  const discount    = usePromo && !usePoints ? DISCOUNT_PROMO : usePoints ? pointsDiscountVnd : voucherDiscountVnd;
 
   // Tính phí giao xe theo khoảng cách (5k/km)
   // vehicleLatLng cần parse từ vehicleAddress params — nếu không có tọa độ thì dùng base 15km
@@ -127,7 +140,26 @@ export default function CreateBookingScreen() {
   const giuCho      = Math.round(thanhTien * DEPOSIT_RATE);
   const khinhanXe   = thanhTien - giuCho;
 
-  useEffect(() => { loadCards(); loadPoints(); loadAddresses(); }, []);
+  useEffect(() => { loadPoints(); loadAddresses(); loadBookedDates(); }, []);
+
+  // Tải lại thẻ mỗi khi màn hình được focus (ví dụ: sau khi thêm thẻ xong quay lại)
+  useFocusEffect(useCallback(() => { loadCards(); }, []));
+
+  async function loadBookedDates() {
+    try {
+      const res = await vehicleService.getBookedDates(vehicleId);
+      if (res.success) {
+        setBookedRanges(res.data.map(r => ({
+          start: new Date(r.startDate),
+          end: new Date(r.endDate),
+        })));
+      }
+    } catch {}
+  }
+
+  function checkConflict(start, end) {
+    return bookedRanges.some(r => start < r.end && end > r.start);
+  }
 
   async function loadAddresses() {
     try {
@@ -154,6 +186,26 @@ export default function CreateBookingScreen() {
     } catch {}
   }
 
+  async function applyVoucher() {
+    const code = voucherCode.trim();
+    if (!code) return showError('Nhập mã voucher trước');
+    setVoucherLoading(true);
+    try {
+      const res = await voucherService.check(code, subtotal);
+      if (res.success) {
+        setVoucherData(res.data);
+        setUsePromo(false);
+        setUsePoints(false);
+        showSuccess(`Áp dụng thành công! Giảm ${formatPrice(res.data.discountAmount)}`);
+      }
+    } catch (e) {
+      showError(e?.response?.data?.message || 'Mã voucher không hợp lệ');
+      setVoucherData(null);
+    } finally {
+      setVoucherLoading(false);
+    }
+  }
+
   async function loadCards() {
     try {
       const result = await cardService.getMyCards();
@@ -170,23 +222,29 @@ export default function CreateBookingScreen() {
   function onStartChange(_, date) {
     setShowStartPicker(false);
     if (!date) return;
-    setStartDate(date);
+    let newEnd = endDate;
     if (date >= endDate) {
-      const ne = new Date(date);
-      ne.setDate(ne.getDate() + 1);
-      setEndDate(ne);
+      newEnd = new Date(date);
+      newEnd.setDate(newEnd.getDate() + 1);
+      setEndDate(newEnd);
     }
+    setStartDate(date);
+    setDateConflict(checkConflict(date, newEnd));
   }
+
   function onEndChange(_, date) {
     setShowEndPicker(false);
     if (!date) return;
     if (date <= startDate) return showError('Ngày trả phải sau ngày nhận');
     setEndDate(date);
+    setDateConflict(checkConflict(startDate, date));
   }
 
   async function handleSubmit() {
     if (!agreed)         return showError('Vui lòng đồng ý với chính sách hủy chuyến');
     if (!selectedCardId) return showError('Vui lòng chọn thẻ thanh toán');
+    if (dateConflict || checkConflict(startDate, endDate))
+      return showError('Xe đã được đặt trong khoảng thời gian này, vui lòng chọn ngày khác');
 
     router.push({
       pathname: '/booking/payment',
@@ -198,6 +256,8 @@ export default function CreateBookingScreen() {
           cardId: selectedCardId,
           note: [note, deliveryOption === 'delivery' && selectedAddress ? `[Giao xe đến: ${[selectedAddress.detail, selectedAddress.ward, selectedAddress.district].filter(Boolean).join(', ')}]` : ''].filter(Boolean).join(' '),
           usePoints: usePoints ? usablePoints : 0,
+          // Chỉ gửi voucherCode khi không dùng promo hay điểm thưởng
+          voucherCode: (!usePromo && !usePoints && voucherData) ? voucherData.code : '',
         }),
         totalAmount: thanhTien,
         vehicleName,
@@ -286,6 +346,33 @@ export default function CreateBookingScreen() {
         )}
         {showEndPicker && (
           <DateTimePicker value={endDate} mode="date" minimumDate={new Date(startDate.getTime() + 86400000)} onChange={onEndChange} />
+        )}
+
+        {/* Cảnh báo trùng ngày */}
+        {dateConflict && (
+          <View style={styles.conflictBanner}>
+            <Ionicons name="warning-outline" size={16} color="#92400E" />
+            <Text style={styles.conflictText}>
+              Xe đã được đặt trong khoảng thời gian này. Vui lòng chọn ngày khác.
+            </Text>
+          </View>
+        )}
+
+        {/* Lịch ngày đã đặt */}
+        {bookedRanges.length > 0 && (
+          <View style={styles.bookedSection}>
+            <View style={styles.bookedHeader}>
+              <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
+              <Text style={styles.bookedTitle}>Xe đã được đặt trong các ngày:</Text>
+            </View>
+            {bookedRanges.map((r, i) => (
+              <Text key={i} style={styles.bookedRange}>
+                • {r.start.getDate().toString().padStart(2,'0')}/{(r.start.getMonth()+1).toString().padStart(2,'0')}/{r.start.getFullYear()}
+                {' — '}
+                {r.end.getDate().toString().padStart(2,'0')}/{(r.end.getMonth()+1).toString().padStart(2,'0')}/{r.end.getFullYear()}
+              </Text>
+            ))}
+          </View>
         )}
 
         {/* 3b. Hình thức nhận xe */}
@@ -445,7 +532,7 @@ export default function CreateBookingScreen() {
             {/* Khuyến mãi */}
             <Text style={styles.promoTitle}>Khuyến mãi</Text>
             {/* Option 1: Promo 100K */}
-            <TouchableOpacity style={styles.promoOption} onPress={() => { setUsePromo(true); setUsePoints(false); }}>
+            <TouchableOpacity style={styles.promoOption} onPress={() => { setUsePromo(true); setUsePoints(false); setVoucherData(null); setShowVoucherInput(false); }}>
               <View style={[styles.radio, (usePromo && !usePoints) && styles.radioSelected]}>
                 {(usePromo && !usePoints) && <View style={styles.radioInner} />}
               </View>
@@ -460,7 +547,7 @@ export default function CreateBookingScreen() {
             </TouchableOpacity>
             {/* Option 2: Dùng điểm thưởng */}
             {pointsBalance > 0 && (
-              <TouchableOpacity style={styles.promoOption} onPress={() => { setUsePoints(true); setUsePromo(false); }}>
+              <TouchableOpacity style={styles.promoOption} onPress={() => { setUsePoints(true); setUsePromo(false); setVoucherData(null); setShowVoucherInput(false); }}>
                 <View style={[styles.radio, usePoints && styles.radioSelected]}>
                   {usePoints && <View style={styles.radioInner} />}
                 </View>
@@ -474,17 +561,43 @@ export default function CreateBookingScreen() {
                 {usePoints && <Text style={styles.promoAmount}>-{(usablePoints * 1000).toLocaleString('vi-VN')}đ</Text>}
               </TouchableOpacity>
             )}
-            {/* Option 3: Mã khuyến mãi */}
-            <TouchableOpacity style={styles.promoOption} onPress={() => { setUsePromo(false); setUsePoints(false); }}>
+            {/* Option 3: Mã voucher */}
+            <TouchableOpacity style={styles.promoOption} onPress={() => {
+              setUsePromo(false); setUsePoints(false); setShowVoucherInput(true);
+            }}>
               <View style={[styles.radio, (!usePromo && !usePoints) && styles.radioSelected]}>
                 {(!usePromo && !usePoints) && <View style={styles.radioInner} />}
               </View>
               <View style={styles.promoIcon}>
-                <Ionicons name="pricetag" size={16} color="#EF4444" />
+                <Ionicons name="ticket-outline" size={16} color="#EF4444" />
               </View>
-              <Text style={[styles.promoLabel, { flex: 1 }]}>Mã khuyến mãi</Text>
-              <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.promoLabel}>Mã voucher</Text>
+                {voucherData && (
+                  <Text style={styles.promoSub}>Mã: {voucherData.code}</Text>
+                )}
+              </View>
+              {voucherData
+                ? <Text style={styles.promoAmount}>-{formatPrice(voucherData.discountAmount)}</Text>
+                : <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />}
             </TouchableOpacity>
+            {showVoucherInput && (
+              <View style={styles.voucherInputRow}>
+                <TextInput
+                  style={styles.voucherInput}
+                  placeholder="Nhập mã voucher..."
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={voucherCode}
+                  onChangeText={setVoucherCode}
+                  autoCapitalize="characters"
+                />
+                {voucherLoading
+                  ? <ActivityIndicator color={COLORS.primary} style={{ marginHorizontal: SPACING.sm }} />
+                  : <TouchableOpacity style={styles.voucherApplyBtn} onPress={applyVoucher}>
+                      <Text style={styles.voucherApplyText}>Áp dụng</Text>
+                    </TouchableOpacity>}
+              </View>
+            )}
 
             {deliveryOption === 'delivery' && selectedAddress && (
               <PriceRow label={`Phí giao xe (${deliveryDistKm}km)`} value={`+${formatPrice(deliveryFee)}`} />
@@ -651,6 +764,23 @@ const styles = StyleSheet.create({
   metaText: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary },
   metaDot: { fontSize: FONT_SIZE.xs, color: COLORS.textTertiary },
 
+  // Xung dot ngay
+  conflictBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.sm,
+    backgroundColor: '#FEF3C7', borderRadius: RADIUS.md,
+    borderWidth: 1, borderColor: '#FCD34D',
+    padding: SPACING.md, marginHorizontal: SPACING.md, marginBottom: SPACING.sm,
+  },
+  conflictText: { flex: 1, fontSize: FONT_SIZE.sm, color: '#92400E', lineHeight: 20 },
+  bookedSection: {
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.md,
+    marginHorizontal: SPACING.md, marginBottom: SPACING.sm,
+    padding: SPACING.md,
+  },
+  bookedHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: SPACING.xs },
+  bookedTitle: { fontSize: FONT_SIZE.xs, fontWeight: '600', color: COLORS.textSecondary },
+  bookedRange: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, paddingVertical: 2 },
+
   // Bảo hiểm banner
   insuranceBanner: {
     flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.sm,
@@ -781,6 +911,20 @@ const styles = StyleSheet.create({
   addrRowActive: { backgroundColor: COLORS.primaryLight + '30' },
   addrLabel: { fontSize: FONT_SIZE.sm, fontWeight: '700', color: COLORS.text, marginBottom: 2 },
   addrDetail: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary },
+
+  // Voucher
+  voucherInputRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginTop: SPACING.xs },
+  voucherInput: {
+    flex: 1, backgroundColor: COLORS.surface, borderRadius: RADIUS.sm,
+    borderWidth: 1, borderColor: COLORS.border,
+    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
+    fontSize: FONT_SIZE.sm, color: COLORS.text,
+  },
+  voucherApplyBtn: {
+    backgroundColor: COLORS.primary, borderRadius: RADIUS.sm,
+    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
+  },
+  voucherApplyText: { color: '#FFF', fontWeight: '700', fontSize: FONT_SIZE.sm },
 
   // Bottom
   bottomBar: { padding: SPACING.lg, backgroundColor: COLORS.background, borderTopWidth: 1, borderTopColor: COLORS.border },

@@ -51,10 +51,8 @@ const DEFAULT_FILTERS = {
   featureIds: [],
   sortBy: 'created_at',
   order: 'desc',
-  // UI-only (chưa kết nối backend)
-  kmLimit: null,    // index trong KM_STEPS, null = bất kỳ
-  overspeedFee: null,
-  distance: null,
+  kmLimit: null,        // index trong KM_STEPS, null = bất kỳ
+  overspeedFee: null,   // index trong FEE_STEPS
   fuelConsumption: null,
 };
 
@@ -73,6 +71,9 @@ export default function SearchScreen() {
   const activeCount = [
     filters.transmission, filters.fuelType, filters.seats, filters.brand,
     filters.minPrice, filters.maxPrice, filters.yearFrom, filters.yearTo,
+    filters.kmLimit !== null ? 'kmLimit' : null,
+    filters.overspeedFee !== null ? 'overspeedFee' : null,
+    filters.fuelConsumption !== null ? 'fuelConsumption' : null,
     ...(filters.featureIds || []),
   ].filter(Boolean).length;
 
@@ -99,21 +100,24 @@ export default function SearchScreen() {
       if (keyword.trim()) params.province = keyword.trim();
       if (f.transmission) params.transmission = f.transmission;
       if (f.fuelType) params.fuelType = f.fuelType;
-      if (f.seats) params.minSeats = f.seats;
+      if (f.seats) params.seats = f.seats; // exact match
       if (f.brand) params.brand = f.brand;
       if (f.minPrice) params.minPrice = f.minPrice;
       if (f.maxPrice) params.maxPrice = f.maxPrice;
       if (f.yearFrom) params.yearFrom = f.yearFrom;
       if (f.yearTo) params.yearTo = f.yearTo;
-      if (f.featureIds?.length) params.featureIds = f.featureIds;
+      if (f.featureIds?.length) params.featureIds = f.featureIds.join(',');
       params.sortBy = f.sortBy;
       params.order = f.order;
       // Filters đã kết nối backend
       if (f.kmLimit !== null) params.minKmLimit = KM_STEPS[f.kmLimit];
       if (f.overspeedFee !== null) params.maxOverageFee = FEE_STEPS[f.overspeedFee] * 1000;
       if (f.fuelConsumption !== null) {
-        const fcMap = { lt5: 5, '5to7': 7, '7to10': 10 };
-        if (fcMap[f.fuelConsumption]) params.maxFuelConsumption = fcMap[f.fuelConsumption];
+        const fcMap = { lt5: 5, '5to7': 7, '7to10': 10, gt10: null };
+        if (f.fuelConsumption in fcMap && fcMap[f.fuelConsumption] !== null) {
+          params.maxFuelConsumption = fcMap[f.fuelConsumption];
+        }
+        // gt10: không lọc thêm (lấy tất cả xe tiêu thụ nhiều nhiên liệu)
       }
 
       const result = await vehicleService.search(params);
@@ -413,18 +417,6 @@ export default function SearchScreen() {
               formatValue={v => v === null ? 'Bất kỳ' : `${FEE_STEPS[v]}K/km trở xuống`}
             />
 
-            {/* Khoảng cách */}
-            <FilterSlider
-              label="Khoảng cách"
-              steps={DIST_STEPS}
-              value={draft.distance}
-              onChange={v => setDraft(p => ({ ...p, distance: v }))}
-              formatValue={v => v === null ? 'Bất kỳ' : `≤ ${DIST_STEPS[v]} km`}
-              onTooltip={() => setTooltip({
-                title: 'Khoảng cách',
-                content: 'Hiển thị các xe trong phạm vi bạn lựa chọn.',
-              })}
-            />
 
           </ScrollView>
 
