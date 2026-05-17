@@ -5,12 +5,12 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import { bookingService } from '../../services/booking.service';
-import { reviewService } from '../../services/review.service';
 import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../../constants/theme';
 import { showSuccess, showError } from '../../utils/toast';
 import { formatPrice, formatDate } from '../../utils/format';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 
 const TABS = [
   { key: 'all', label: 'Tất cả' },
@@ -64,7 +64,7 @@ export default function TripsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Tabs lọc */}
       <View style={styles.tabWrapper}>
         {TABS.map(item => (
@@ -121,6 +121,30 @@ export default function TripsScreen() {
                   </View>
                 </View>
 
+                {item.status === 'confirmed' && (
+                  <TouchableOpacity
+                    style={styles.startBtn}
+                    onPress={async () => {
+                      await bookingService.updateStatus(item.id, 'in_progress');
+                      loadBookings();
+                    }}
+                  >
+                    <Ionicons name="car-outline" size={16} color="#fff" />
+                    <Text style={styles.startBtnText}>Bắt đầu chuyến</Text>
+                  </TouchableOpacity>
+                )}
+                {item.status === 'in_progress' && (
+                  <TouchableOpacity
+                    style={styles.completeBtn}
+                    onPress={async () => {
+                      await bookingService.updateStatus(item.id, 'completed');
+                      loadBookings();
+                    }}
+                  >
+                    <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
+                    <Text style={styles.startBtnText}>Hoàn thành chuyến</Text>
+                  </TouchableOpacity>
+                )}
                 {['pending_payment', 'confirmed'].includes(item.status) && (
                   <TouchableOpacity style={styles.cancelBtn} onPress={() => setCancelTarget(item.id)}>
                     <Text style={styles.cancelBtnText}>Hủy đơn</Text>
@@ -174,7 +198,7 @@ export default function TripsScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -210,6 +234,17 @@ const styles = StyleSheet.create({
   bookingInfo: { marginTop: SPACING.xs },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginTop: 4 },
   infoText: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary },
+  startBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: COLORS.primary, borderRadius: RADIUS.md,
+    padding: SPACING.sm, justifyContent: 'center', marginTop: SPACING.sm,
+  },
+  completeBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#8B5CF6', borderRadius: RADIUS.md,
+    padding: SPACING.sm, justifyContent: 'center', marginTop: SPACING.sm,
+  },
+  startBtnText: { color: '#fff', fontWeight: '600', fontSize: FONT_SIZE.sm },
   cancelBtn: {
     borderWidth: 1, borderColor: COLORS.error, borderRadius: RADIUS.md,
     padding: SPACING.sm, alignItems: 'center', marginTop: SPACING.sm,

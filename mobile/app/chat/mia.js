@@ -1,235 +1,215 @@
-import { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity,
-  KeyboardAvoidingView, Platform, ActivityIndicator,
+  View, Text, FlatList, TextInput, TouchableOpacity,
+  StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
-import { router } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { chatService } from '../../services/chat.service';
-import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../../constants/theme';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-const WELCOME = {
-  id: 'welcome',
-  from: 'mia',
-  text: 'Xin chào! Mình là Mia 🌟, trợ lý ảo của Mioto. Mình có thể giúp bạn giải đáp mọi thắc mắc về thuê xe, thanh toán, bảo hiểm và nhiều hơn nữa!\n\nBạn có thể hỏi về:\n• Giá thuê xe\n• Cách đặt xe\n• Chính sách hủy\n• Bảo hiểm thuê xe\n• Điểm thưởng\n\nHãy gõ câu hỏi bên dưới 👇',
-  createdAt: new Date().toISOString(),
-};
+const GEMINI_API_KEY = 'AIzaSyDfdaGc7e1B8c9mjx0o_CIOb26MXAG4TY8';
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`;
+
+const SYSTEM_PROMPT = `Bạn là Mia, trợ lý ảo của ứng dụng Mioto Clone — ứng dụng cho thuê xe tự lái tại Việt Nam.
+Nhiệm vụ của bạn là hỗ trợ người dùng về:
+- Cách đặt xe, hủy đơn, thanh toán
+- Xác thực KYC (bằng lái xe / CCCD)
+- Điểm thưởng (1 điểm = 10.000đ, dùng giảm tối đa 30% đơn hàng)
+- Đăng ký xe cho thuê (dành cho chủ xe)
+- Các tính năng GPS, chat với chủ xe, yêu thích xe
+- Chính sách và quy định thuê xe
+
+Trả lời ngắn gọn, thân thiện, bằng tiếng Việt. Nếu câu hỏi ngoài phạm vi ứng dụng thì lịch sự từ chối và hướng người dùng về các chủ đề liên quan đến thuê xe.`;
 
 const QUICK_QUESTIONS = [
-  'Giá thuê xe bao nhiêu?',
-  'Cách đặt xe như thế nào?',
-  'Chính sách hủy xe?',
-  'Bảo hiểm thuê xe',
+  'Cách đặt xe?',
+  'Xác thực KYC',
+  'Điểm thưởng',
+  'Hủy đơn thuê',
+  'Thanh toán',
+  'Đăng ký xe',
 ];
 
-function timeStr(dateStr) {
-  const d = new Date(dateStr);
-  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-}
-
-export default function MiaChatScreen() {
-  const [messages, setMessages] = useState([WELCOME]);
+export default function MiaScreen() {
+  const router = useRouter();
+  const listRef = useRef(null);
+  const [kavKey, setKavKey] = useState(0);
+  const [messages, setMessages] = useState([
+    { id: '0', from: 'bot', text: 'Xin chào! Mình là Mia 👋 Trợ lý ảo của Mioto Clone. Mình có thể giúp gì cho bạn?' },
+  ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const flatRef = useRef(null);
+  const historyRef = useRef([]);
 
-  const send = useCallback(async (text) => {
-    const msg = text.trim();
-    if (!msg || loading) return;
+  useFocusEffect(useCallback(() => {
+    setKavKey(k => k + 1);
+  }, []));
+
+  const send = async (text) => {
+    const userText = text || input.trim();
+    if (!userText || loading) return;
     setInput('');
 
-    const userMsg = { id: Date.now().toString(), from: 'user', text: msg, createdAt: new Date().toISOString() };
+    const userMsg = { id: Date.now().toString(), from: 'user', text: userText };
     setMessages(prev => [...prev, userMsg]);
     setLoading(true);
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+
+    historyRef.current.push({ role: 'user', parts: [{ text: userText }] });
 
     try {
-      const result = await chatService.sendToMia(msg);
-      if (result.success) {
-        const miaMsg = {
-          id: (Date.now() + 1).toString(),
-          from: 'mia',
-          text: result.data.reply,
-          createdAt: result.data.timestamp,
-        };
-        setMessages(prev => [...prev, miaMsg]);
-      }
+      const res = await fetch(GEMINI_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          contents: historyRef.current,
+        }),
+      });
+      const data = await res.json();
+      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text
+        || 'Xin lỗi, mình chưa hiểu câu đó. Bạn thử hỏi lại nhé!';
+
+      historyRef.current.push({ role: 'model', parts: [{ text: reply }] });
+      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), from: 'bot', text: reply }]);
     } catch {
+      historyRef.current.pop();
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
-        from: 'mia',
-        text: 'Xin lỗi, Mia đang gặp sự cố kết nối. Vui lòng thử lại sau nhé!',
-        createdAt: new Date().toISOString(),
+        from: 'bot',
+        text: 'Xin lỗi, mình đang gặp sự cố kết nối. Bạn vui lòng thử lại sau nhé!',
       }]);
     } finally {
       setLoading(false);
-      setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 100);
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     }
-  }, [loading]);
+  };
 
   return (
-    <KeyboardAvoidingView
+    <SafeAreaView style={{flex:1}}>
+      <KeyboardAvoidingView
+      key={kavKey}
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior="padding"
       keyboardVerticalOffset={0}
     >
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+          <Ionicons name="arrow-back" size={24} color="#111" />
         </TouchableOpacity>
         <View style={styles.headerInfo}>
-          <View style={styles.miaAvatar}>
-            <Text style={styles.miaAvatarText}>M</Text>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>M</Text>
           </View>
           <View>
-            <Text style={styles.headerName}>Mia</Text>
-            <Text style={styles.headerSub}>Trợ lý ảo Mioto • Luôn trực tuyến</Text>
+            <Text style={styles.headerName}>Mia — Trợ lý ảo</Text>
+            <Text style={styles.headerSub}>Powered by Gemini AI</Text>
           </View>
         </View>
       </View>
 
       {/* Messages */}
       <FlatList
-        ref={flatRef}
+        ref={listRef}
         data={messages}
         keyExtractor={item => item.id}
         contentContainerStyle={styles.msgList}
-        onContentSizeChange={() => flatRef.current?.scrollToEnd({ animated: false })}
         renderItem={({ item }) => (
-          <View style={[styles.msgRow, item.from === 'user' && styles.msgRowUser]}>
-            {item.from === 'mia' && (
-              <View style={styles.miaAvatarSmall}>
-                <Text style={styles.miaAvatarTextSm}>M</Text>
-              </View>
-            )}
-            <View style={[styles.bubble, item.from === 'user' ? styles.bubbleUser : styles.bubbleMia]}>
-              <Text style={[styles.bubbleText, item.from === 'user' && styles.bubbleTextUser]}>
-                {item.text}
-              </Text>
-              <Text style={[styles.msgTime, item.from === 'user' && { color: 'rgba(255,255,255,0.7)' }]}>
-                {timeStr(item.createdAt)}
-              </Text>
-            </View>
+          <View style={[styles.bubble, item.from === 'user' ? styles.userBubble : styles.botBubble]}>
+            <Text style={[styles.bubbleText, item.from === 'user' && styles.userText]}>
+              {item.text}
+            </Text>
           </View>
         )}
+        ListFooterComponent={loading ? (
+          <View style={styles.typingRow}>
+            <View style={styles.botBubble}>
+              <ActivityIndicator size="small" color="#13B981" />
+            </View>
+          </View>
+        ) : null}
+        onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
       />
 
       {/* Quick questions */}
-      {messages.length <= 2 && (
-        <View style={styles.quickWrap}>
-          <Text style={styles.quickLabel}>Câu hỏi thường gặp:</Text>
-          <View style={styles.quickRow}>
-            {QUICK_QUESTIONS.map(q => (
-              <TouchableOpacity key={q} style={styles.quickBtn} onPress={() => send(q)}>
-                <Text style={styles.quickBtnText}>{q}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      )}
-
-      {/* Loading indicator */}
-      {loading && (
-        <View style={styles.typingRow}>
-          <View style={styles.miaAvatarSmall}>
-            <Text style={styles.miaAvatarTextSm}>M</Text>
-          </View>
-          <View style={styles.typingBubble}>
-            <ActivityIndicator size="small" color={COLORS.primary} />
-            <Text style={styles.typingText}>Mia đang trả lời...</Text>
-          </View>
-        </View>
-      )}
+      <View style={styles.quickWrap}>
+        <FlatList
+          horizontal
+          data={QUICK_QUESTIONS}
+          keyExtractor={q => q}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.quickRow}
+          renderItem={({ item }) => (
+            <TouchableOpacity style={styles.quickBtn} onPress={() => send(item)}>
+              <Text style={styles.quickText}>{item}</Text>
+            </TouchableOpacity>
+          )}
+        />
+      </View>
 
       {/* Input */}
-      <View style={styles.inputBar}>
+      <View style={styles.inputRow}>
         <TextInput
           style={styles.input}
           value={input}
           onChangeText={setInput}
-          placeholder="Hỏi Mia về thuê xe..."
-          placeholderTextColor={COLORS.textTertiary}
-          multiline
-          maxLength={500}
+          placeholder="Nhập câu hỏi cho Mia..."
           returnKeyType="send"
-          onSubmitEditing={() => send(input)}
-          blurOnSubmit
+          onSubmitEditing={() => send()}
+          editable={!loading}
         />
-        <TouchableOpacity
-          style={[styles.sendBtn, (!input.trim() || loading) && { opacity: 0.4 }]}
-          onPress={() => send(input)}
-          disabled={!input.trim() || loading}
-        >
-          <Ionicons name="send" size={20} color="#FFF" />
+        <TouchableOpacity style={styles.sendBtn} onPress={() => send()} disabled={loading}>
+          <Ionicons name="send" size={20} color="#fff" />
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
   header: {
-    flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
-    paddingTop: 50, paddingBottom: SPACING.md, paddingHorizontal: SPACING.lg,
-    backgroundColor: COLORS.background, borderBottomWidth: 1, borderBottomColor: COLORS.border,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    padding: 16, backgroundColor: '#fff',
+    borderBottomWidth: 1, borderBottomColor: '#eee',
+    paddingTop: Platform.OS === 'ios' ? 48 : 16,
   },
   backBtn: { padding: 4 },
-  headerInfo: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-  miaAvatar: {
-    width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.primary,
-    justifyContent: 'center', alignItems: 'center',
+  headerInfo: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  avatar: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: '#13B981', justifyContent: 'center', alignItems: 'center',
   },
-  miaAvatarText: { color: '#FFF', fontWeight: '700', fontSize: 18 },
-  headerName: { fontSize: FONT_SIZE.md, fontWeight: '700', color: COLORS.text },
-  headerSub: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary },
-
-  msgList: { padding: SPACING.md, paddingBottom: SPACING.sm, gap: SPACING.sm },
-  msgRow: { flexDirection: 'row', alignItems: 'flex-end', gap: SPACING.xs, marginBottom: SPACING.xs },
-  msgRowUser: { flexDirection: 'row-reverse' },
-  miaAvatarSmall: {
-    width: 28, height: 28, borderRadius: 14, backgroundColor: COLORS.primary,
-    justifyContent: 'center', alignItems: 'center', flexShrink: 0,
-  },
-  miaAvatarTextSm: { color: '#FFF', fontWeight: '700', fontSize: 12 },
-  bubble: {
-    maxWidth: '78%', borderRadius: RADIUS.lg, padding: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-  },
-  bubbleMia: { backgroundColor: COLORS.surface, borderBottomLeftRadius: 4 },
-  bubbleUser: { backgroundColor: COLORS.primary, borderBottomRightRadius: 4 },
-  bubbleText: { fontSize: FONT_SIZE.sm, color: COLORS.text, lineHeight: 20 },
-  bubbleTextUser: { color: '#FFF' },
-  msgTime: { fontSize: 10, color: COLORS.textTertiary, marginTop: 4, textAlign: 'right' },
-
-  quickWrap: { padding: SPACING.md, borderTopWidth: 1, borderTopColor: COLORS.border },
-  quickLabel: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, marginBottom: SPACING.xs },
-  quickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs },
+  avatarText: { color: '#fff', fontWeight: '800', fontSize: 18 },
+  headerName: { fontSize: 15, fontWeight: '700', color: '#111' },
+  headerSub: { fontSize: 12, color: '#13B981' },
+  msgList: { padding: 16, paddingBottom: 8 },
+  bubble: { maxWidth: '80%', padding: 12, borderRadius: 16, marginBottom: 8 },
+  botBubble: { alignSelf: 'flex-start', backgroundColor: '#fff' },
+  userBubble: { alignSelf: 'flex-end', backgroundColor: '#13B981' },
+  bubbleText: { fontSize: 14, color: '#111', lineHeight: 20 },
+  userText: { color: '#fff' },
+  typingRow: { paddingHorizontal: 16, paddingBottom: 8 },
+  quickWrap: { backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#eee' },
+  quickRow: { paddingHorizontal: 12, paddingVertical: 8, gap: 8 },
   quickBtn: {
-    borderWidth: 1, borderColor: COLORS.primary, borderRadius: RADIUS.full,
-    paddingHorizontal: SPACING.md, paddingVertical: 6,
+    paddingHorizontal: 14, paddingVertical: 7,
+    backgroundColor: '#f0fdf4', borderRadius: 20,
+    borderWidth: 1, borderColor: '#13B981',
   },
-  quickBtnText: { fontSize: FONT_SIZE.xs, color: COLORS.primary, fontWeight: '600' },
-
-  typingRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, paddingHorizontal: SPACING.md, marginBottom: SPACING.xs },
-  typingBubble: {
-    flexDirection: 'row', alignItems: 'center', gap: SPACING.xs,
-    backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: SPACING.sm, paddingHorizontal: SPACING.md,
-  },
-  typingText: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary },
-
-  inputBar: {
-    flexDirection: 'row', alignItems: 'flex-end', gap: SPACING.sm,
-    padding: SPACING.md, backgroundColor: COLORS.background,
-    borderTopWidth: 1, borderTopColor: COLORS.border,
+  quickText: { fontSize: 12, color: '#13B981', fontWeight: '500' },
+  inputRow: {
+    flexDirection: 'row', gap: 8, padding: 12,
+    backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#eee',
   },
   input: {
-    flex: 1, backgroundColor: COLORS.surface, borderRadius: RADIUS.lg,
-    paddingHorizontal: SPACING.md, paddingVertical: 10,
-    fontSize: FONT_SIZE.sm, color: COLORS.text, maxHeight: 100,
+    flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 24,
+    paddingHorizontal: 16, paddingVertical: 8, fontSize: 14,
   },
   sendBtn: {
-    width: 42, height: 42, borderRadius: 21,
-    backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center',
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: '#13B981', justifyContent: 'center', alignItems: 'center',
   },
 });
