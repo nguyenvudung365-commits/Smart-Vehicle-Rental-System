@@ -10,6 +10,8 @@ import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../../constants/theme';
 import { showSuccess, showError } from '../../utils/toast';
 import { formatPrice } from '../../utils/format';
 import MapPickerModal from '../../components/MapPickerModal';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 
 const FUEL_OPTIONS = [
   { value: 'gasoline', label: 'Xăng' },
@@ -133,7 +135,8 @@ export default function EditVehicleScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <SafeAreaView style={{flex:1}}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={COLORS.text} />
@@ -258,6 +261,7 @@ export default function EditVehicleScreen() {
         title="Chọn vị trí xe"
       />
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 

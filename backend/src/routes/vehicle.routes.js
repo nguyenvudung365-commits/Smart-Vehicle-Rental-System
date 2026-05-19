@@ -1,5 +1,4 @@
 // src/routes/vehicle.routes.js
-// Buoi 5: CRUD xe (host) + search/detail (public)
 const router = require('express').Router();
 const controller = require('../controllers/vehicle.controller');
 const { authenticate, requireRole } = require('../middlewares/auth.middleware');
@@ -11,58 +10,26 @@ const { createVehicleSchema, updateVehicleSchema } = require('../validators');
 router.get('/search', controller.search);
 router.get('/features', controller.listFeatures);
 
-// ===== Host-only CRUD (dat truoc route /:id de /mine khong bi bat la id) =====
-router.get('/mine', authenticate, requireRole('host', 'admin'), controller.listMyVehicles);
+// GET /mine — tất cả user đã đăng nhập đều gọi được (renter → empty, host → danh sách xe)
+router.get('/mine', authenticate, controller.listMyVehicles);
 
-router.post(
-  '/',
-  authenticate,
-  requireRole('host', 'admin'),
-  validate(createVehicleSchema),
-  controller.create
-);
+// POST / — mọi user đã đăng nhập (renter sẽ được tự động nâng cấp lên host)
+router.post('/', authenticate, validate(createVehicleSchema), controller.create);
 
-router.put(
-  '/:id',
-  authenticate,
-  requireRole('host', 'admin'),
-  validate(updateVehicleSchema),
-  controller.update
-);
+// Các route quản lý xe — chỉ cần authenticate, service tự kiểm tra ownerId
+router.put('/:id', authenticate, validate(updateVehicleSchema), controller.update);
+router.delete('/:id', authenticate, controller.remove);
+router.patch('/:id/availability', authenticate, controller.toggleAvailability);
+router.post('/:id/submit', authenticate, controller.submitForReview);
 
-router.delete('/:id', authenticate, requireRole('host', 'admin'), controller.remove);
+// Ảnh xe
+router.post('/:id/images', authenticate, uploadMultiple('images', 10), controller.uploadImages);
+router.delete('/:id/images/:imageId', authenticate, controller.deleteImage);
 
-router.patch(
-  '/:id/availability',
-  authenticate,
-  requireRole('host', 'admin'),
-  controller.toggleAvailability
-);
+// ===== Public — ngay da dat cua 1 xe (de frontend hien thi lich) =====
+router.get('/:id/booked-dates', controller.getBookedDates);
 
-router.post(
-  '/:id/submit',
-  authenticate,
-  requireRole('host', 'admin'),
-  controller.submitForReview
-);
-
-// ===== Anh xe =====
-router.post(
-  '/:id/images',
-  authenticate,
-  requireRole('host', 'admin'),
-  uploadMultiple('images', 10),
-  controller.uploadImages
-);
-
-router.delete(
-  '/:id/images/:imageId',
-  authenticate,
-  requireRole('host', 'admin'),
-  controller.deleteImage
-);
-
-// ===== Public - xem chi tiet (dat cuoi) =====
+// ===== Public — xem chi tiết (đặt cuối để không bị bắt nhầm route trên) =====
 router.get('/:id', controller.getOne);
 
 module.exports = router;

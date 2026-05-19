@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authService } from '../services/auth.service';
 import api from '../services/api';
 
@@ -37,10 +38,21 @@ export function AuthProvider({ children }) {
 
   async function loadUser() {
     try {
+      // Bước 1: Hiện dữ liệu local ngay lập tức để tránh màn hình trắng
       const stored = await authService.getStoredUser();
-      setUser(stored);
-    } catch (err) {
-      console.error('Load user error:', err);
+      if (stored) setUser(stored);
+
+      // Bước 2: Fetch profile mới nhất từ server để đồng bộ
+      // Đảm bảo birthday, rewardPoints, role luôn cập nhật dù user
+      // đã đăng nhập từ trước hoặc vừa đăng xuất rồi đăng nhập lại
+      const res = await authService.getProfile();
+      if (res?.success && res.data) {
+        const fresh = res.data;
+        setUser(fresh);
+        await AsyncStorage.setItem('user', JSON.stringify(fresh));
+      }
+    } catch {
+      // Không có mạng → giữ dữ liệu local, không báo lỗi cho người dùng
     } finally {
       setLoading(false);
     }
@@ -59,6 +71,8 @@ export function AuthProvider({ children }) {
     const result = await authService.login(credentials);
     if (result.success) {
       setUser(result.data.user);
+      // Lưu push token lên server sau khi đăng nhập để nhận thông báo
+      // .catch() để lỗi push token không ảnh hưởng đến luồng đăng nhập
       registerPushToken().catch(() => {});
     }
     return result;
@@ -75,15 +89,21 @@ export function AuthProvider({ children }) {
 
   async function logout() {
     try {
+      // Xóa push token trên server trước khi đăng xuất
+      // Tránh server gửi thông báo đến thiết bị sau khi đã đăng xuất
       await api.put('/auth/push-token', { pushToken: null });
     } catch {}
-    await authService.logout();
-    setUser(null);
+    await authService.logout(); // Xóa token khỏi SecureStore và AsyncStorage
+    setUser(null); // Xóa khỏi state → app tự điều hướng về trang đăng nhập
   }
 
   async function updateUser(data) {
     const result = await authService.updateProfile(data);
-    if (result.success) setUser(prev => ({ ...prev, ...result.data }));
+    if (result.success) {
+      // Spread operator: giữ nguyên các trường cũ, chỉ ghi đè trường mới
+      // Tránh mất dữ liệu khi chỉ cập nhật 1 trường (vd: chỉ đổi tên)
+      setUser(prev => ({ ...prev, ...result.data }));
+    }
     return result;
   }
 
@@ -97,7 +117,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser, uploadAvatar }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser, uploadAvatar, loadUser }}>
       {children}
     </AuthContext.Provider>
   );

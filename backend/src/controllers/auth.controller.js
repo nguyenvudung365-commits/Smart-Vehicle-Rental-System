@@ -9,6 +9,7 @@ const registerSchema = z.object({
   email: z.string().email('Email không hợp lệ').optional(),
   password: z.string().min(6, 'Mật khẩu tối thiểu 6 ký tự'),
   fullName: z.string().min(2, 'Họ tên tối thiểu 2 ký tự').max(100),
+  referralCode: z.string().optional(),
 });
 
 const loginSchema = z.object({
@@ -93,6 +94,26 @@ class AuthController {
     try {
       await authService.updatePushToken(req.user.id, req.body.pushToken);
       return success(res, null, 'Cập nhật push token thành công');
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  // PUT /api/auth/change-password
+  async changePassword(req, res, next) {
+    try {
+      await authService.changePassword(req.user.id, req.body);
+      return success(res, null, 'Đổi mật khẩu thành công');
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  // DELETE /api/auth/account
+  async deleteAccount(req, res, next) {
+    try {
+      await authService.deleteAccount(req.user.id);
+      return success(res, null, 'Tài khoản đã được vô hiệu hóa');
     } catch (err) {
       next(err);
     }

@@ -14,5 +14,7 @@ router.put('/profile', authenticate, (req, res, next) => authController.updatePr
 router.post('/logout', authenticate, (req, res) => authController.logout(req, res));
 router.put('/push-token', authenticate, (req, res, next) => authController.updatePushToken(req, res, next));
 router.put('/avatar', authenticate, uploadSingle('avatar'), (req, res, next) => authController.updateAvatar(req, res, next));
+router.put('/change-password', authenticate, (req, res, next) => authController.changePassword(req, res, next));
+router.delete('/account', authenticate, (req, res, next) => authController.deleteAccount(req, res, next));
 
 module.exports = router;

@@ -6,7 +6,7 @@ export function showSuccess(message) {
 }
 
 export function showError(message) {
-  Toast.show({ type: 'error', text1: 'Loi', text2: message, visibilityTime: 3000 });
+  Toast.show({ type: 'error', text1: 'Lỗi', text2: message, visibilityTime: 3000 });
 }
 
 export function showInfo(message) {

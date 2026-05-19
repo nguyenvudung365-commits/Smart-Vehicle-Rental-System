@@ -1,12 +1,19 @@
 // src/controllers/vehicle.controller.js
-// Buoi 5: CRUD xe + search/detail
 const vehicleService = require('../services/vehicle.service');
 const { ok, created, fail, asyncHandler, success } = require('../utils/response');
+const { generateAccessToken } = require('../utils/jwt');
 
-// POST /api/vehicles — tao xe moi (host)
+// POST /api/vehicles — tao xe moi
+// Neu user la renter, service se tu dong nang cap len host va tra ve newAccessToken
 exports.create = asyncHandler(async (req, res) => {
+  const wasRenter = req.user.role === 'renter';
   const vehicle = await vehicleService.createVehicle(req.user.id, req.body);
-  return created(res, vehicle, 'Tao xe thanh cong');
+
+  const responseBody = { success: true, message: 'Tao xe thanh cong', data: vehicle };
+  if (wasRenter) {
+    responseBody.newAccessToken = generateAccessToken({ userId: req.user.id, role: 'host' });
+  }
+  return res.status(201).json(responseBody);
 });
 
 // GET /api/vehicles/mine — danh sach xe cua host
@@ -87,4 +94,18 @@ exports.search = asyncHandler(async (req, res) => {
 exports.listFeatures = asyncHandler(async (req, res) => {
   const features = await vehicleService.getAllFeatures();
   return ok(res, features);
+});
+
+// GET /api/vehicles/:id/booked-dates — cac khoang ngay da dat de hien thi lich
+exports.getBookedDates = asyncHandler(async (req, res) => {
+  const prisma = require('../config/prisma');
+  const dates = await prisma.booking.findMany({
+    where: {
+      vehicleId: req.params.id,
+      status: { in: ['pending_payment', 'confirmed', 'in_progress'] },
+    },
+    select: { startDate: true, endDate: true },
+    orderBy: { startDate: 'asc' },
+  });
+  return ok(res, dates);
 });

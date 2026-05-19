@@ -8,12 +8,14 @@ const { uploadFields } = require('../middlewares/upload');
 // Tat ca route kyc deu can dang nhap
 router.use(authenticate);
 
-// POST /api/kyc — gui ho so KYC (upload 2 anh GPLX mat truoc + mat sau)
+// POST /api/kyc — gửi hồ sơ KYC: GPLX (bắt buộc) + CCCD (tùy chọn)
 router.post(
   '/',
   uploadFields([
     { name: 'frontImage', maxCount: 1 },
     { name: 'backImage', maxCount: 1 },
+    { name: 'cccdFront', maxCount: 1 },
+    { name: 'cccdBack', maxCount: 1 },
   ]),
   controller.submit
 );

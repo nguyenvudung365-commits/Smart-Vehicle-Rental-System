@@ -39,6 +39,13 @@ class AuthService {
           where: { id: referrer.id },
           data: { rewardPoints: { increment: 50 } },
         });
+        // Thông báo cho người giới thiệu
+        const { createNotification } = require('./notification.service');
+        createNotification(referrer.id, {
+          title: 'Bạn nhận được 50 điểm thưởng!',
+          body: `${fullName} vừa đăng ký qua mã giới thiệu của bạn. Bạn được cộng 50 điểm thưởng.`,
+          type: 'referral_bonus',
+        }).catch(() => {});
       }
     }
 
@@ -60,7 +67,10 @@ class AuthService {
         email: true,
         fullName: true,
         role: true,
+        birthday: true,
         createdAt: true,
+        rewardPoints: true,
+        referralCode: true,
       },
     });
 
@@ -74,6 +84,8 @@ class AuthService {
   async login({ phone, password }) {
     const user = await prisma.user.findUnique({ where: { phone } });
 
+    // Thông báo lỗi giống nhau cho cả "SĐT không tồn tại" và "sai mật khẩu"
+    // để tránh hacker biết số điện thoại nào đã đăng ký trong hệ thống
     if (!user) {
       throw new Error('Số điện thoại hoặc mật khẩu không đúng');
     }
@@ -82,6 +94,8 @@ class AuthService {
       throw new Error('Tài khoản đã bị vô hiệu hóa');
     }
 
+    // bcrypt.compare so sánh mật khẩu gõ vào với hash trong DB
+    // Không thể đảo ngược hash để lấy lại mật khẩu gốc
     const isValid = await bcrypt.compare(password, user.passwordHash);
     if (!isValid) {
       throw new Error('Số điện thoại hoặc mật khẩu không đúng');
@@ -97,6 +111,10 @@ class AuthService {
         fullName: user.fullName,
         avatarUrl: user.avatarUrl,
         role: user.role,
+        birthday: user.birthday,
+        createdAt: user.createdAt,
+        rewardPoints: user.rewardPoints,
+        referralCode: user.referralCode,
       },
       tokens,
     };
@@ -159,6 +177,57 @@ class AuthService {
         fullName: true, birthday: true, role: true,
         rewardPoints: true, referralCode: true, createdAt: true,
       },
+    });
+  }
+
+  // Đổi mật khẩu
+  async changePassword(userId, { currentPassword, newPassword }) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw Object.assign(new Error('Người dùng không tồn tại'), { status: 404 });
+
+    const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isValid) throw Object.assign(new Error('Mật khẩu hiện tại không đúng'), { status: 400 });
+
+    if (newPassword.length < 6)
+      throw Object.assign(new Error('Mật khẩu mới tối thiểu 6 ký tự'), { status: 400 });
+
+    const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+  }
+
+  // Yêu cầu xóa tài khoản — gửi thông báo cho admin xét duyệt
+  async deleteAccount(userId) {
+    const { createNotification } = require('./notification.service');
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { fullName: true, phone: true },
+    });
+    // Đánh dấu yêu cầu xóa trong DB (cần prisma db push trước)
+    try {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { deleteRequestedAt: new Date() },
+      });
+    } catch (e) {
+      // Bỏ qua nếu cột chưa tồn tại, vẫn gửi thông báo
+    }
+    // Tạo thông báo cho tất cả admin
+    const admins = await prisma.user.findMany({
+      where: { role: 'admin' },
+      select: { id: true },
+    });
+    await Promise.all(admins.map(admin =>
+      createNotification(admin.id, {
+        title: 'Yêu cầu xóa tài khoản',
+        body: `Người dùng ${user?.fullName} (${user?.phone}) yêu cầu xóa tài khoản. Vào Admin để xử lý.`,
+        type: 'delete_request',
+      })
+    ));
+    // Xác nhận cho người dùng
+    await createNotification(userId, {
+      title: 'Yêu cầu đã được gửi',
+      body: 'Yêu cầu xóa tài khoản đã gửi đến Admin. Chúng tôi sẽ xử lý trong 1–3 ngày làm việc.',
+      type: 'delete_request',
     });
   }
 

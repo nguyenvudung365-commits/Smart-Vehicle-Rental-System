@@ -1,31 +1,34 @@
 import api from './api';
 
 export const adminService = {
-  // Vehicles
-  async getPendingVehicles() {
-    const { data } = await api.get('/admin/vehicles/pending');
-    return data;
-  },
-  async approveVehicle(id) {
-    const { data } = await api.patch(`/admin/vehicles/${id}/approve`);
-    return data;
-  },
-  async rejectVehicle(id, reason) {
-    const { data } = await api.patch(`/admin/vehicles/${id}/reject`, { reason });
-    return data;
-  },
-
   // KYC
-  async getPendingKycs() {
-    const { data } = await api.get('/admin/kyc/pending');
-    return data;
-  },
-  async approveKyc(userId) {
-    const { data } = await api.patch(`/admin/kyc/${userId}/approve`);
-    return data;
-  },
-  async rejectKyc(userId, reason) {
-    const { data } = await api.patch(`/admin/kyc/${userId}/reject`, { reason });
-    return data;
-  },
+  getPendingKyc: () => api.get('/admin/kyc'),
+  reviewKyc: (id, status, rejectReason) => api.patch(`/admin/kyc/${id}`, { status, rejectReason }),
+
+  // Xe
+  getPendingVehicles: () => api.get('/admin/vehicles'),
+  reviewVehicle: (id, status, rejectReason) => api.patch(`/admin/vehicles/${id}`, { status, rejectReason }),
+
+  // Yêu cầu xóa tài khoản
+  getDeleteRequests: () => api.get('/admin/delete-requests'),
+  confirmDelete: (id) => api.patch(`/admin/delete-requests/${id}/confirm`),
+  rejectDelete: (id) => api.patch(`/admin/delete-requests/${id}/reject`),
+
+  // Thống kê
+  getStats: () => api.get('/admin/stats'),
+  getDashboard: () => api.get('/admin/dashboard'),
+
+  // Quản lý user
+  getUsers: (params) => api.get('/admin/users', { params }),
+  toggleUserActive: (id) => api.patch(`/admin/users/${id}/toggle-active`),
+
+  // Voucher
+  getVouchers: () => api.get('/admin/vouchers'),
+  createVoucher: (payload) => api.post('/admin/vouchers', payload),
+  toggleVoucher: (id) => api.patch(`/admin/vouchers/${id}/toggle`),
+  deleteVoucher: (id) => api.delete(`/admin/vouchers/${id}`),
+
+  // Cấu hình hệ thống
+  getConfig: () => api.get('/admin/config'),
+  updateConfig: (payload) => api.patch('/admin/config', payload),
 };

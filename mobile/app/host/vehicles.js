@@ -11,6 +11,8 @@ import { vehicleService } from '../../services/vehicle.service';
 import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../../constants/theme';
 import { showSuccess, showError } from '../../utils/toast';
 import { formatPrice } from '../../utils/format';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 
 const STATUS_MAP = {
   draft: { label: 'Nhap', color: COLORS.textSecondary },
@@ -77,7 +79,7 @@ export default function HostVehiclesScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <FlatList
         data={vehicles}
         keyExtractor={item => item.id}
@@ -180,7 +182,7 @@ export default function HostVehiclesScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 

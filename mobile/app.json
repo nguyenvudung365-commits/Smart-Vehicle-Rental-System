@@ -16,6 +16,7 @@
         "backgroundColor": "#13B981"
       },
       "package": "com.miotoclone.app",
+      "softwareKeyboardLayoutMode": "resize",
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyAgjfPuDy18cs3GxccKeco6rJ0OOgMEEPo"
@@ -34,7 +35,7 @@
       ]
     ],
     "extra": {
-      "apiUrl": "http://192.168.1.14:3000/api"
+      "apiUrl": "http://192.168.101.230:3000/api"
     }
   }
 }

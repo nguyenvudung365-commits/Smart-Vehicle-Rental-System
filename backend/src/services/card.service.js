@@ -30,17 +30,11 @@ function luhnCheck(cardNumber) {
 async function addCard(userId, payload) {
   const { cardNumber, holderName, expiryMonth, expiryYear } = payload;
 
-  if (!luhnCheck(cardNumber)) {
-    const err = new Error('So the khong hop le (Luhn check)');
-    err.status = 400;
-    throw err;
-  }
-
   // Validate expiry khong o qua khu
   const now = new Date();
   const exp = new Date(expiryYear, expiryMonth - 1, 1);
   if (exp < new Date(now.getFullYear(), now.getMonth(), 1)) {
-    const err = new Error('The da het han');
+    const err = new Error('Thẻ đã hết hạn');
     err.status = 400;
     throw err;
   }
@@ -76,7 +70,7 @@ async function deleteCard(cardId, userId) {
     where: { id: cardId, userId },
   });
   if (!card) {
-    const err = new Error('Khong tim thay the');
+    const err = new Error('Không tìm thấy thẻ');
     err.status = 404;
     throw err;
   }
@@ -105,7 +99,7 @@ async function setDefault(cardId, userId) {
     where: { id: cardId, userId },
   });
   if (!card) {
-    const err = new Error('Khong tim thay the');
+    const err = new Error('Không tìm thấy thẻ');
     err.status = 404;
     throw err;
   }

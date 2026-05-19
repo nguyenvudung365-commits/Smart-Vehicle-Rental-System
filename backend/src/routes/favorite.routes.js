@@ -1,21 +1,25 @@
-const express = require('express');
+const router = require('express').Router();
 const { authenticate } = require('../middlewares/auth.middleware');
-const { toggleFavorite, getMyFavorites, checkFavorite } = require('../services/favorite.service');
-const { success } = require('../utils/response');
+const { toggleFavorite, getFavorites } = require('../services/favorite.service');
+const { success, error } = require('../utils/response');
+const prisma = require('../config/prisma');
 
-const router = express.Router();
 router.use(authenticate);
-
-router.get('/', async (req, res, next) => {
-  try { success(res, await getMyFavorites(req.user.id)); } catch (e) { next(e); }
+router.get('/', async (req, res) => {
+  try { return success(res, await getFavorites(req.user.id)); }
+  catch (e) { return error(res, e.message, e.status || 500); }
 });
-
-router.get('/:vehicleId/check', async (req, res, next) => {
-  try { success(res, await checkFavorite(req.user.id, req.params.vehicleId)); } catch (e) { next(e); }
+router.get('/:vehicleId/check', async (req, res) => {
+  try {
+    const fav = await prisma.favorite.findFirst({
+      where: { userId: req.user.id, vehicleId: req.params.vehicleId },
+    });
+    return success(res, { isFavorited: !!fav });
+  } catch (e) { return error(res, e.message, e.status || 500); }
 });
-
-router.post('/:vehicleId', async (req, res, next) => {
-  try { success(res, await toggleFavorite(req.user.id, req.params.vehicleId)); } catch (e) { next(e); }
+router.post('/:vehicleId', async (req, res) => {
+  try { return success(res, await toggleFavorite(req.user.id, req.params.vehicleId)); }
+  catch (e) { return error(res, e.message, e.status || 500); }
 });
 
 module.exports = router;

@@ -19,6 +19,8 @@ const addressRoutes = require('./routes/address.routes');
 const chatRoutes = require('./routes/chat.routes');
 const pointsRoutes = require('./routes/points.routes');
 const conversationRoutes = require('./routes/conversation.routes');
+const voucherRoutes = require('./routes/voucher.routes');
+const hostRoutes = require('./routes/host.routes');
 const { error } = require('./utils/response');
 
 const app = express();
@@ -66,6 +68,8 @@ app.use('/api/addresses', addressRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/points', pointsRoutes);
 app.use('/api/conversations', conversationRoutes);
+app.use('/api/vouchers', voucherRoutes);
+app.use('/api/host', hostRoutes);
 
 // === 404 handler ===
 app.use((req, res) => {
@@ -77,7 +81,9 @@ app.use((err, req, res, next) => {
   console.error('[ERROR]', err.message);
   const status = err.status || 500;
   const code = err.code || null;
-  error(res, err.message || 'Loi server khong xac dinh', status, code);
+  if (!res.headersSent) {
+    error(res, err.message || 'Lỗi server không xác định', status, code);
+  }
 });
 
 app.listen(PORT, '0.0.0.0', () => {

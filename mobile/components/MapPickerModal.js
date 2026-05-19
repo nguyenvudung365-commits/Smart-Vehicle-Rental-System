@@ -51,23 +51,24 @@ export default function MapPickerModal({
 
   async function doReverseGeocode(la, lo) {
     try {
-      const results = await Location.reverseGeocodeAsync({ latitude: la, longitude: lo });
-      if (results.length > 0) {
-        const r = results[0];
-        const parts = [r.name, r.street, r.district, r.subregion, r.city || r.region]
-          .filter(Boolean)
-          .filter((v, i, arr) => v !== arr[i - 1]);
-        const displayAddress = parts.join(', ');
-        const geocodedParts = {
-          province: r.city || r.region || '',
-          district: r.subregion || r.district || '',
-          ward: r.name || '',
-          detail: r.street || '',
-        };
-        setAddress(displayAddress);
-        setAddressParts(geocodedParts);
-        return geocodedParts;
-      }
+      // Dùng Nominatim (OpenStreetMap) thay vì expo-location để nhất quán iOS & Android
+      const resp = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${la}&lon=${lo}&accept-language=vi`,
+        { headers: { 'User-Agent': 'MiotoApp/1.0' } }
+      );
+      const data = await resp.json();
+      if (!data?.address) return null;
+      const a = data.address;
+      const geocodedParts = {
+        province: a.city || a.state || a.province || '',
+        district: a.city_district || a.county || a.suburb || '',
+        ward: a.suburb || a.quarter || a.neighbourhood || '',
+        detail: [a.house_number, a.road].filter(Boolean).join(' '),
+      };
+      const displayParts = [geocodedParts.detail, geocodedParts.ward, geocodedParts.district, geocodedParts.province].filter(Boolean);
+      setAddress(displayParts.join(', ') || data.display_name || '');
+      setAddressParts(geocodedParts);
+      return geocodedParts;
     } catch {}
     return null;
   }

@@ -9,6 +9,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../../constants/theme';
 import { showError } from '../../utils/toast';
 import SuggestionInput from '../../components/SuggestionInput';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 
 export default function LoginScreen() {
   const { login } = useAuth();
@@ -54,7 +56,8 @@ export default function LoginScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
+    <SafeAreaView style={{flex:1}}>
+      <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: COLORS.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
@@ -137,6 +140,7 @@ export default function LoginScreen() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 

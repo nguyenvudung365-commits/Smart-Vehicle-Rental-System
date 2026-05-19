@@ -20,8 +20,8 @@ async function migrateTokensIfNeeded() {
 
 export const authService = {
   // FR-01: Đăng ký
-  async register({ phone, email, password, fullName }) {
-    const { data } = await api.post('/auth/register', { phone, email, password, fullName });
+  async register({ phone, email, password, fullName, referralCode }) {
+    const { data } = await api.post('/auth/register', { phone, email, password, fullName, referralCode });
     if (data.success) {
       await this._saveAuthData(data.data);
     }
