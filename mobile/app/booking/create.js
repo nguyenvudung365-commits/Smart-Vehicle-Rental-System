@@ -104,9 +104,11 @@ export default function CreateBookingScreen() {
 
   // Voucher
   const [voucherCode, setVoucherCode] = useState('');
-  const [voucherData, setVoucherData] = useState(null); // { id, code, discountAmount }
+  const [voucherData, setVoucherData] = useState(null);
   const [voucherLoading, setVoucherLoading] = useState(false);
   const [showVoucherInput, setShowVoucherInput] = useState(false);
+  const [showVoucherList, setShowVoucherList] = useState(false);
+  const [availableVouchers, setAvailableVouchers] = useState([]);
 
   // Tính toán giá
   const diffMs    = Math.max(endDate.getTime() - startDate.getTime(), 0);
@@ -184,6 +186,35 @@ export default function CreateBookingScreen() {
       const res = await pointsService.getPointsInfo();
       if (res.success) setPointsBalance(res.data.balance);
     } catch {}
+  }
+
+  async function openVoucherList() {
+    setShowVoucherList(true);
+    if (availableVouchers.length === 0) {
+      try {
+        const res = await voucherService.getAvailable();
+        if (res.success) setAvailableVouchers(res.data);
+      } catch {}
+    }
+  }
+
+  async function selectVoucherFromList(v) {
+    setShowVoucherList(false);
+    setVoucherLoading(true);
+    try {
+      const res = await voucherService.check(v.code, subtotal);
+      if (res.success) {
+        setVoucherData(res.data);
+        setVoucherCode(v.code);
+        setUsePromo(false);
+        setUsePoints(false);
+        showSuccess(`Áp dụng thành công! Giảm ${formatPrice(res.data.discountAmount)}`);
+      }
+    } catch (e) {
+      showError(e?.response?.data?.message || 'Không thể áp dụng voucher này');
+    } finally {
+      setVoucherLoading(false);
+    }
   }
 
   async function applyVoucher() {
@@ -563,7 +594,9 @@ export default function CreateBookingScreen() {
             )}
             {/* Option 3: Mã voucher */}
             <TouchableOpacity style={styles.promoOption} onPress={() => {
-              setUsePromo(false); setUsePoints(false); setShowVoucherInput(true);
+              setUsePromo(false); setUsePoints(false);
+              setShowVoucherInput(true);
+              openVoucherList();
             }}>
               <View style={[styles.radio, (!usePromo && !usePoints) && styles.radioSelected]}>
                 {(!usePromo && !usePoints) && <View style={styles.radioInner} />}
@@ -582,20 +615,38 @@ export default function CreateBookingScreen() {
                 : <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />}
             </TouchableOpacity>
             {showVoucherInput && (
-              <View style={styles.voucherInputRow}>
-                <TextInput
-                  style={styles.voucherInput}
-                  placeholder="Nhập mã voucher..."
-                  placeholderTextColor={COLORS.textTertiary}
-                  value={voucherCode}
-                  onChangeText={setVoucherCode}
-                  autoCapitalize="characters"
-                />
-                {voucherLoading
-                  ? <ActivityIndicator color={COLORS.primary} style={{ marginHorizontal: SPACING.sm }} />
-                  : <TouchableOpacity style={styles.voucherApplyBtn} onPress={applyVoucher}>
-                      <Text style={styles.voucherApplyText}>Áp dụng</Text>
-                    </TouchableOpacity>}
+              <View>
+                <View style={styles.voucherInputRow}>
+                  <TextInput
+                    style={styles.voucherInput}
+                    placeholder="Nhập mã voucher..."
+                    placeholderTextColor={COLORS.textTertiary}
+                    value={voucherCode}
+                    onChangeText={setVoucherCode}
+                    autoCapitalize="characters"
+                  />
+                  {voucherLoading
+                    ? <ActivityIndicator color={COLORS.primary} style={{ marginHorizontal: SPACING.sm }} />
+                    : <TouchableOpacity style={styles.voucherApplyBtn} onPress={applyVoucher}>
+                        <Text style={styles.voucherApplyText}>Áp dụng</Text>
+                      </TouchableOpacity>}
+                </View>
+                {voucherData && (
+                  <View style={styles.voucherConditions}>
+                    <Ionicons name="information-circle-outline" size={13} color={COLORS.textSecondary} />
+                    <Text style={styles.voucherConditionText}>
+                      {voucherData.discountType === 'percent'
+                        ? `Giảm ${voucherData.discountValue}%${voucherData.maxDiscount ? ` (tối đa ${formatPrice(voucherData.maxDiscount)})` : ''}`
+                        : `Giảm cố định ${formatPrice(voucherData.discountValue)}`}
+                      {voucherData.minOrderValue > 0
+                        ? ` · Đơn tối thiểu ${formatPrice(voucherData.minOrderValue)}` : ''}
+                      {voucherData.expiresAt
+                        ? ` · HSD: ${new Date(voucherData.expiresAt).toLocaleDateString('vi-VN')}` : ''}
+                      {voucherData.usageLimit
+                        ? ` · Còn ${voucherData.usageLimit - voucherData.usedCount} lượt` : ''}
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
 
@@ -698,6 +749,60 @@ export default function CreateBookingScreen() {
       />
 
       {/* Modal giải thích "?" */}
+      {/* Modal danh sách voucher */}
+      <Modal visible={showVoucherList} animationType="slide" transparent onRequestClose={() => setShowVoucherList(false)}>
+        <TouchableOpacity style={styles.voucherListOverlay} activeOpacity={1} onPress={() => setShowVoucherList(false)}>
+          <TouchableOpacity activeOpacity={1} style={styles.voucherListSheet}>
+            <View style={styles.voucherListHeader}>
+              <Text style={styles.voucherListTitle}>Chọn voucher</Text>
+              <TouchableOpacity onPress={() => setShowVoucherList(false)}>
+                <Ionicons name="close" size={22} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+            {availableVouchers.length === 0 ? (
+              <Text style={styles.voucherEmptyText}>Không có voucher khả dụng</Text>
+            ) : (
+              <FlatList
+                data={availableVouchers}
+                keyExtractor={i => i.id}
+                contentContainerStyle={{ padding: SPACING.md, gap: SPACING.sm }}
+                renderItem={({ item }) => {
+                  const canUse = subtotal >= item.minOrderValue;
+                  return (
+                    <TouchableOpacity
+                      style={[styles.voucherListItem, !canUse && styles.voucherListItemDisabled]}
+                      onPress={() => canUse && selectVoucherFromList(item)}
+                      disabled={!canUse}
+                    >
+                      <View style={styles.voucherListLeft}>
+                        <Text style={styles.voucherListCode}>{item.code}</Text>
+                        <Text style={styles.voucherListDesc}>
+                          {item.discountType === 'percent'
+                            ? `Giảm ${item.discountValue}%${item.maxDiscount ? ` (tối đa ${formatPrice(item.maxDiscount)})` : ''}`
+                            : `Giảm ${formatPrice(item.discountValue)}`}
+                        </Text>
+                        {item.minOrderValue > 0 && (
+                          <Text style={[styles.voucherListCond, !canUse && { color: COLORS.error }]}>
+                            {canUse ? `Đơn tối thiểu ${formatPrice(item.minOrderValue)}` : `Cần thêm ${formatPrice(item.minOrderValue - subtotal)} nữa`}
+                          </Text>
+                        )}
+                        {item.expiresAt && (
+                          <Text style={styles.voucherListCond}>HSD: {new Date(item.expiresAt).toLocaleDateString('vi-VN')}</Text>
+                        )}
+                      </View>
+                      {canUse && <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />}
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            )}
+            <View style={styles.voucherListManual}>
+              <Text style={styles.voucherListManualText}>Hoặc nhập mã thủ công bên dưới</Text>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       <Modal visible={!!infoModal} transparent animationType="fade" onRequestClose={() => setInfoModal('')}>
         <TouchableOpacity style={styles.infoOverlay} activeOpacity={1} onPress={() => setInfoModal('')}>
           <View style={styles.infoBox}>
@@ -925,6 +1030,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
   },
   voucherApplyText: { color: '#FFF', fontWeight: '700', fontSize: FONT_SIZE.sm },
+  voucherConditions: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 4,
+    paddingHorizontal: SPACING.sm, paddingBottom: SPACING.sm,
+  },
+  voucherConditionText: { fontSize: 11, color: COLORS.textSecondary, flex: 1, lineHeight: 16 },
+  voucherListOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  voucherListSheet: { backgroundColor: COLORS.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '70%' },
+  voucherListHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SPACING.lg, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  voucherListTitle: { fontSize: FONT_SIZE.lg, fontWeight: '700', color: COLORS.text },
+  voucherEmptyText: { textAlign: 'center', color: COLORS.textSecondary, padding: SPACING.xl },
+  voucherListItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface, borderRadius: RADIUS.md, padding: SPACING.md, borderWidth: 1, borderColor: COLORS.border },
+  voucherListItemDisabled: { opacity: 0.5 },
+  voucherListLeft: { flex: 1 },
+  voucherListCode: { fontSize: FONT_SIZE.md, fontWeight: '700', color: COLORS.primary },
+  voucherListDesc: { fontSize: FONT_SIZE.sm, color: COLORS.text, marginTop: 2 },
+  voucherListCond: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2 },
+  voucherListManual: { padding: SPACING.md, alignItems: 'center', borderTopWidth: 1, borderTopColor: COLORS.border },
+  voucherListManualText: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary },
 
   // Bottom
   bottomBar: { padding: SPACING.lg, backgroundColor: COLORS.background, borderTopWidth: 1, borderTopColor: COLORS.border },

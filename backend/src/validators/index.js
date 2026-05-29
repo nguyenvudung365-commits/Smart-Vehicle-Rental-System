@@ -44,6 +44,7 @@ const createBookingSchema = z.object({
   cardId: z.string().optional(),
   note: z.string().max(500).optional(),
   usePoints: z.coerce.number().int().min(0).optional(),
+  voucherCode: z.string().max(50).optional(),
 }).refine(d => new Date(d.endDate) > new Date(d.startDate), {
   message: 'endDate phai sau startDate',
   path: ['endDate'],
