@@ -5,5 +5,5 @@ export const conversationService = {
     const res = await api.get('/conversations');
     return res.data; // { success: true, data: [...] }
   },
-  getOrCreate: (_, vehicleId) => api.post('/conversations', { vehicleId }).then(r => r.data),
+  getOrCreate: (hostId, vehicleId) => api.post('/conversations', { hostId, vehicleId }).then(r => r.data),
 };

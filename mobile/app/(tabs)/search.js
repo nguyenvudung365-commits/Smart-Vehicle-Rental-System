@@ -126,7 +126,7 @@ export default function SearchScreen() {
         setTotal(result.data.pagination.total);
       }
     } catch (err) {
-      console.error('Search error:', err);
+      // no-op
     } finally {
       setLoading(false);
     }

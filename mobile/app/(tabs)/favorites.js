@@ -18,7 +18,7 @@ export default function FavoritesScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await favoriteService.getMyFavorites();
+      const result = await favoriteService.list();
       if (result.success) setFavorites(result.data);
     } catch { showError('Không tải được danh sách yêu thích'); }
     finally { setLoading(false); }
@@ -29,7 +29,7 @@ export default function FavoritesScreen() {
   async function handleRemove(vehicleId) {
     try {
       await favoriteService.toggle(vehicleId);
-      setFavorites(prev => prev.filter(f => f.id !== vehicleId));
+      setFavorites(prev => prev.filter(f => f.vehicleId !== vehicleId));
       showSuccess('Đã bỏ yêu thích');
     } catch {}
   }
@@ -57,39 +57,43 @@ export default function FavoritesScreen() {
               </TouchableOpacity>
             </View>
           }
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.card}
-              onPress={() => router.push(`/vehicle/${item.id}`)}
-              activeOpacity={0.85}
-            >
-              <Image
-                source={item.coverImage || item.images?.[0]?.imageUrl}
-                style={styles.cardImg}
-                contentFit="cover"
-                cachePolicy="memory-disk"
-              />
-              <View style={styles.cardBody}>
-                <Text style={styles.carName} numberOfLines={1}>
-                  {item.brand} {item.model} {item.year}
-                </Text>
-                <Text style={styles.carLocation} numberOfLines={1}>
-                  <Ionicons name="location-outline" size={13} color={COLORS.textSecondary} />
-                  {' '}{item.location || 'Chưa có địa chỉ'}
-                </Text>
-                <Text style={styles.carPrice}>
-                  {formatPrice(item.pricePerDay)}<Text style={styles.perDay}>/ngày</Text>
-                </Text>
-              </View>
+          renderItem={({ item }) => {
+            const v = item.vehicle || {};
+            const location = [v.address?.district, v.address?.province].filter(Boolean).join(', ');
+            return (
               <TouchableOpacity
-                style={styles.heartBtn}
-                onPress={() => handleRemove(item.id)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={styles.card}
+                onPress={() => router.push(`/vehicle/${item.vehicleId}`)}
+                activeOpacity={0.85}
               >
-                <Ionicons name="heart" size={22} color={COLORS.error} />
+                <Image
+                  source={v.images?.[0]?.imageUrl}
+                  style={styles.cardImg}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                />
+                <View style={styles.cardBody}>
+                  <Text style={styles.carName} numberOfLines={1}>
+                    {v.brand} {v.model} {v.year}
+                  </Text>
+                  <Text style={styles.carLocation} numberOfLines={1}>
+                    <Ionicons name="location-outline" size={13} color={COLORS.textSecondary} />
+                    {' '}{location || 'Chưa có địa chỉ'}
+                  </Text>
+                  <Text style={styles.carPrice}>
+                    {formatPrice(v.pricePerDay)}<Text style={styles.perDay}>/ngày</Text>
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.heartBtn}
+                  onPress={() => handleRemove(item.vehicleId)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="heart" size={22} color={COLORS.error} />
+                </TouchableOpacity>
               </TouchableOpacity>
-            </TouchableOpacity>
-          )}
+            );
+          }}
         />
       )}
     </View>

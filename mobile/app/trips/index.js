@@ -121,29 +121,40 @@ export default function TripsScreen() {
                   </View>
                 </View>
 
-                {item.status === 'confirmed' && (
+                {item.status === 'host_handover' && (
                   <TouchableOpacity
                     style={styles.startBtn}
                     onPress={async () => {
-                      await bookingService.updateStatus(item.id, 'in_progress');
-                      loadBookings();
+                      try {
+                        await bookingService.renterReceived(item.id);
+                        loadBookings();
+                      } catch (err) {
+                        showError(err.response?.data?.message || 'Thất bại');
+                      }
                     }}
                   >
                     <Ionicons name="car-outline" size={16} color="#fff" />
-                    <Text style={styles.startBtnText}>Bắt đầu chuyến</Text>
+                    <Text style={styles.startBtnText}>Đã nhận được xe</Text>
                   </TouchableOpacity>
                 )}
                 {item.status === 'in_progress' && (
                   <TouchableOpacity
                     style={styles.completeBtn}
                     onPress={async () => {
-                      await bookingService.updateStatus(item.id, 'completed');
-                      loadBookings();
+                      try {
+                        await bookingService.renterReturn(item.id);
+                        loadBookings();
+                      } catch (err) {
+                        showError(err.response?.data?.message || 'Thất bại');
+                      }
                     }}
                   >
                     <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
-                    <Text style={styles.startBtnText}>Hoàn thành chuyến</Text>
+                    <Text style={styles.startBtnText}>Trả xe</Text>
                   </TouchableOpacity>
+                )}
+                {item.status === 'renter_return' && (
+                  <Text style={styles.waitingText}>Đã trả xe, chờ chủ xe xác nhận...</Text>
                 )}
                 {['pending_payment', 'confirmed'].includes(item.status) && (
                   <TouchableOpacity style={styles.cancelBtn} onPress={() => setCancelTarget(item.id)}>
@@ -256,6 +267,7 @@ const styles = StyleSheet.create({
     padding: SPACING.sm, justifyContent: 'center', marginTop: SPACING.sm,
   },
   reviewBtnText: { color: COLORS.primary, fontWeight: '600', fontSize: FONT_SIZE.sm },
+  waitingText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.sm, textAlign: 'center', marginTop: SPACING.sm },
   reviewedBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     marginTop: SPACING.sm, justifyContent: 'center',
