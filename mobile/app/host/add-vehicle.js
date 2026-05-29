@@ -1,5 +1,5 @@
 // FR-08: Wizard đăng ký xe mới — 4 bước
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
   ActivityIndicator, KeyboardAvoidingView, Platform, Modal
@@ -13,7 +13,7 @@ import { vehicleService } from '../../services/vehicle.service';
 import { useAuth } from '../../contexts/AuthContext';
 import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../../constants/theme';
 import { showSuccess, showError } from '../../utils/toast';
-import { formatPrice } from '../../utils/format';
+import { formatPrice, formatInputPrice, parseInputPrice } from '../../utils/format';
 import SuggestionInput from '../../components/SuggestionInput';
 import MapPickerModal from '../../components/MapPickerModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -35,6 +35,8 @@ const SEATS_OPTIONS = [4, 5, 7, 9, 16];
 
 export default function AddVehicleScreen() {
   const { loadUser } = useAuth();
+  const scrollRef = useRef(null);
+  const fieldRefs = { brand: useRef(null), model: useRef(null), year: useRef(null), licensePlate: useRef(null), pricePerDay: useRef(null), province: useRef(null), district: useRef(null), ward: useRef(null) };
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [images, setImages] = useState([]);
@@ -87,7 +89,11 @@ export default function AddVehicleScreen() {
         if (!value) e.year = 'Vui lòng nhập năm sản xuất';
         else if (isNaN(value) || value < 1990 || value > 2030) e.year = 'Năm từ 1990 đến 2030';
         else delete e.year; break;
-      case 'licensePlate': if (!value) e.licensePlate = 'Vui lòng nhập biển số xe'; else delete e.licensePlate; break;
+      case 'licensePlate':
+        if (!value) e.licensePlate = 'Vui lòng nhập biển số xe';
+        else if (!/^\d{2}[A-Z]\d?-\d{4,5}$/.test(value.toUpperCase()))
+          e.licensePlate = 'Định dạng: 51A-12345 hoặc 51A1-2345';
+        else delete e.licensePlate; break;
       case 'pricePerDay':
         if (!value) e.pricePerDay = 'Vui lòng nhập giá thuê';
         else if (isNaN(value) || Number(value) < 100000) e.pricePerDay = 'Giá thuê tối thiểu 100.000đ';
@@ -99,32 +105,58 @@ export default function AddVehicleScreen() {
     setErrors(e);
   }
 
-  function validateStep() {
+  function computeErrors() {
+    const e = {};
     if (step === 0) {
-      validateField('brand', brand);
-      validateField('model', model);
-      validateField('year', year);
-      validateField('licensePlate', licensePlate);
-      validateField('pricePerDay', pricePerDay);
-      return brand && model && year && !isNaN(year) && year >= 1990 && year <= 2030
-        && licensePlate && pricePerDay && !isNaN(pricePerDay) && Number(pricePerDay) >= 100000;
+      if (!brand) e.brand = 'Vui lòng nhập hãng xe';
+      if (!model) e.model = 'Vui lòng nhập dòng xe';
+      if (!year) e.year = 'Vui lòng nhập năm sản xuất';
+      else if (isNaN(year) || year < 1990 || year > 2030) e.year = 'Năm từ 1990 đến 2030';
+      if (!licensePlate) e.licensePlate = 'Vui lòng nhập biển số xe';
+      else if (!/^\d{2}[A-Z]\d?-\d{4,5}$/.test(licensePlate.toUpperCase())) e.licensePlate = 'Định dạng: 51A-12345 hoặc 51A1-2345';
+      if (!pricePerDay) e.pricePerDay = 'Vui lòng nhập giá thuê';
+      else if (isNaN(pricePerDay) || Number(pricePerDay) < 100000) e.pricePerDay = 'Giá thuê tối thiểu 100.000đ';
     }
     if (step === 1) {
-      validateField('province', province);
-      validateField('district', district);
-      // Ward bắt buộc chỉ khi không có tọa độ GPS
-      if (!latitude) validateField('ward', ward);
-      return province && district && (ward || !!latitude);
+      if (!province) e.province = 'Vui lòng nhập tỉnh/thành phố';
+      if (!district) e.district = 'Vui lòng nhập quận/huyện';
+      if (!latitude && !ward) e.ward = 'Vui lòng nhập phường/xã';
     }
+    return e;
+  }
+
+  function validateStep() {
+    const e = computeErrors();
+    setErrors(e);
     if (step === 2) {
-      if (images.length === 0) { showError('Cần chọn ít nhất 1 ảnh'); return false; }
-      return true;
+      if (images.length === 0) { showError('Cần chọn ít nhất 1 ảnh'); return { valid: false, errors: {} }; }
+      return { valid: true, errors: {} };
     }
-    return true;
+    return { valid: Object.keys(e).length === 0, errors: e };
+  }
+
+  function scrollToFirstError(errorFields) {
+    const order = ['brand', 'model', 'year', 'licensePlate', 'pricePerDay', 'province', 'district', 'ward'];
+    for (const key of order) {
+      if (errorFields[key] && fieldRefs[key]?.current) {
+        fieldRefs[key].current.measureLayout(
+          scrollRef.current,
+          (x, y) => scrollRef.current?.scrollTo({ y: y - 16, animated: true }),
+          () => {}
+        );
+        return;
+      }
+    }
   }
 
   function handleNext() {
-    if (validateStep()) setStep(s => s + 1);
+    const { valid, errors: newErrors } = validateStep();
+    if (valid) {
+      setStep(s => s + 1);
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    } else {
+      setTimeout(() => scrollToFirstError(newErrors), 50);
+    }
   }
 
   function handleBack() {
@@ -249,7 +281,7 @@ export default function AddVehicleScreen() {
       <>
         <Text style={styles.sectionTitle}>Thông tin xe</Text>
 
-        <Text style={styles.label}>Hãng xe *</Text>
+        <View ref={fieldRefs.brand}><Text style={styles.label}>Hãng xe *</Text></View>
         <SuggestionInput
           fieldKey="vehicle_brand"
           style={[styles.input, errors.brand && styles.inputError]}
@@ -260,7 +292,7 @@ export default function AddVehicleScreen() {
         />
         {errors.brand && <Text style={styles.errorText}>{errors.brand}</Text>}
 
-        <Text style={styles.label}>Dòng xe *</Text>
+        <View ref={fieldRefs.model}><Text style={styles.label}>Dòng xe *</Text></View>
         <SuggestionInput
           fieldKey="vehicle_model"
           style={[styles.input, errors.model && styles.inputError]}
@@ -271,17 +303,20 @@ export default function AddVehicleScreen() {
         />
         {errors.model && <Text style={styles.errorText}>{errors.model}</Text>}
 
-        <Text style={styles.label}>Năm sản xuất *</Text>
+        <View ref={fieldRefs.year}><Text style={styles.label}>Năm sản xuất *</Text></View>
         <TextInput style={[styles.input, errors.year && styles.inputError]} placeholder="VD: 2022" value={year}
-          onChangeText={v => { setYear(v); if (errors.year) validateField('year', v); }}
+          onChangeText={v => { setYear(v); validateField('year', v); }}
           onBlur={() => validateField('year', year)}
           keyboardType="number-pad" maxLength={4} />
         {errors.year && <Text style={styles.errorText}>{errors.year}</Text>}
 
-        <Text style={styles.label}>Biển số xe *</Text>
-        <TextInput style={[styles.input, errors.licensePlate && styles.inputError]} placeholder="VD: 51A-12345" value={licensePlate}
-          onChangeText={v => { setLicensePlate(v.toUpperCase()); if (errors.licensePlate) validateField('licensePlate', v); }}
-          onBlur={() => validateField('licensePlate', licensePlate)} autoCapitalize="characters" />
+        <View ref={fieldRefs.licensePlate}><Text style={styles.label}>Biển số xe *</Text></View>
+        <TextInput style={[styles.input, errors.licensePlate && styles.inputError]}
+          placeholder="VD: 51A-12345 hoặc 51A1-2345"
+          value={licensePlate}
+          onChangeText={v => { const u = v.toUpperCase(); setLicensePlate(u); validateField('licensePlate', u); }}
+          onBlur={() => validateField('licensePlate', licensePlate)}
+          autoCapitalize="characters" maxLength={10} />
         {errors.licensePlate && <Text style={styles.errorText}>{errors.licensePlate}</Text>}
 
         <Text style={styles.label}>Số chỗ ngồi</Text>
@@ -353,15 +388,20 @@ export default function AddVehicleScreen() {
           </>
         )}
 
-        <Text style={styles.label}>Giá thuê / ngày (VND) *</Text>
-        <TextInput style={[styles.input, errors.pricePerDay && styles.inputError]} placeholder="VD: 800000" value={pricePerDay}
-          onChangeText={v => { setPricePerDay(v); if (errors.pricePerDay) validateField('pricePerDay', v); }}
+        <View ref={fieldRefs.pricePerDay}><Text style={styles.label}>Giá thuê / ngày (VND) *</Text></View>
+        <TextInput
+          style={[styles.input, errors.pricePerDay && styles.inputError]}
+          placeholder="VD: 800.000"
+          value={formatInputPrice(pricePerDay)}
+          onChangeText={v => {
+            const raw = parseInputPrice(v);
+            setPricePerDay(raw);
+            if (errors.pricePerDay) validateField('pricePerDay', raw);
+          }}
           onBlur={() => validateField('pricePerDay', pricePerDay)}
-          keyboardType="number-pad" />
+          keyboardType="numeric"
+          selectionColor={COLORS.primary} />
         {errors.pricePerDay && <Text style={styles.errorText}>{errors.pricePerDay}</Text>}
-        {pricePerDay && !isNaN(pricePerDay) && Number(pricePerDay) >= 100000 && (
-          <Text style={styles.pricePreview}>{formatPrice(Number(pricePerDay))}/ngày</Text>
-        )}
 
         <Text style={styles.label}>Mô tả (tùy chọn)</Text>
         <TextInput style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
@@ -536,7 +576,7 @@ export default function AddVehicleScreen() {
           ))}
         </View>
 
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: SPACING.lg, paddingBottom: 100 }}>
+        <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: SPACING.lg, paddingBottom: 100 }}>
           {renderStepContent()}
         </ScrollView>
 
