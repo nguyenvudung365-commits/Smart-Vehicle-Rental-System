@@ -31,9 +31,6 @@ router.patch('/:id/confirm-payment', controller.confirmPayment);
 // PATCH /api/bookings/:id/cancel — huy don
 router.patch('/:id/cancel', validate(cancelBookingSchema), controller.cancel);
 
-// PATCH /api/bookings/:id/status — cap nhat trang thai
-router.patch('/:id/status', controller.updateStatus);
-
 // PATCH /api/bookings/:id/host-confirm — host xac nhan don
 router.patch('/:id/host-confirm', controller.hostConfirm);
 
