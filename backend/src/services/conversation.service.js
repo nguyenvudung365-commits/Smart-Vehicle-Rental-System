@@ -1,21 +1,18 @@
 const prisma = require('../config/prisma');
 
-async function getOrCreateConversation(userId, vehicleId) {
-  const vehicle = await prisma.vehicle.findUnique({ where: { id: vehicleId } });
-  if (!vehicle) { const err = new Error('Không tìm thấy xe'); err.status = 404; throw err; }
-
+async function getOrCreateConversation(userId, hostId, vehicleId) {
   const existing = await prisma.conversation.findFirst({
     where: {
       OR: [
-        { renterId: userId, hostId: vehicle.ownerId },
-        { renterId: vehicle.ownerId, hostId: userId },
+        { renterId: userId, hostId },
+        { renterId: hostId, hostId: userId },
       ],
     },
   });
   if (existing) return existing;
 
   return await prisma.conversation.create({
-    data: { vehicleId, renterId: userId, hostId: vehicle.ownerId },
+    data: { renterId: userId, hostId, vehicleId: vehicleId || null },
   });
 }
 

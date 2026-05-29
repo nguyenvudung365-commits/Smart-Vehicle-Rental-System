@@ -1,6 +1,7 @@
 const express = require('express');
 const { authenticate } = require('../middlewares/auth.middleware');
 const conversationService = require('../services/conversation.service');
+const { getMessages, sendMessage } = require('../services/chat.service');
 const { success, error } = require('../utils/response');
 
 const router = express.Router();
@@ -30,8 +31,7 @@ router.get('/', authenticate, async (req, res, next) => {
 // GET /api/conversations/:id/messages
 router.get('/:id/messages', authenticate, async (req, res, next) => {
   try {
-    const { cursor } = req.query;
-    const messages = await conversationService.getMessages(req.params.id, req.user.id, cursor);
+    const messages = await getMessages(req.params.id, req.user.id);
     success(res, messages);
   } catch (err) {
     next(err);
@@ -43,7 +43,7 @@ router.post('/:id/messages', authenticate, async (req, res, next) => {
   try {
     const { text } = req.body;
     if (!text?.trim()) return error(res, 'Tin nhắn không được trống', 400);
-    const msg = await conversationService.sendMessage(req.params.id, req.user.id, text.trim());
+    const msg = await sendMessage(req.params.id, req.user.id, text.trim());
     success(res, msg, 201);
   } catch (err) {
     next(err);
