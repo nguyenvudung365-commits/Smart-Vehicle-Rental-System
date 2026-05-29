@@ -6,8 +6,9 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Constants from 'expo-constants';
 
-const GEMINI_API_KEY = 'AIzaSyDfdaGc7e1B8c9mjx0o_CIOb26MXAG4TY8';
+const GEMINI_API_KEY = Constants.expoConfig?.extra?.geminiApiKey ?? '';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`;
 
 const SYSTEM_PROMPT = `Bạn là Mia, trợ lý ảo của ứng dụng Mioto Clone — ứng dụng cho thuê xe tự lái tại Việt Nam.
@@ -72,7 +73,7 @@ export default function MiaScreen() {
 
       historyRef.current.push({ role: 'model', parts: [{ text: reply }] });
       setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), from: 'bot', text: reply }]);
-    } catch {
+    } catch (e) {
       historyRef.current.pop();
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),

@@ -1,4 +1,4 @@
-const { getMyNotifications, markRead, markAllRead } = require('../services/notification.service');
+const { getNotifications: getMyNotifications, markAsRead: markRead, markAllAsRead: markAllRead } = require('../services/notification.service');
 const { success } = require('../utils/response');
 
 async function list(req, res, next) {

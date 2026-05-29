@@ -35,7 +35,8 @@
       ]
     ],
     "extra": {
-      "apiUrl": "http://192.168.101.230:3000/api"
+      "apiUrl": "http://192.168.101.230:3000/api",
+      "geminiApiKey": "AIzaSyCoiM8KoXUT-XzZ4UVG6XsU-3jFo98BlaI"
     }
   }
 }

@@ -23,25 +23,27 @@ export default function PaymentScreen() {
     try { return JSON.parse(bookingPayload); } catch { return null; }
   })();
 
-  // Chỉ tạo booking khi user nhập đúng OTP và bấm xác nhận
   const handleConfirm = async () => {
-    if (otp !== '000000') {
-      showError('Mã OTP không đúng');
-      return;
-    }
     if (!payload) {
       showError('Thông tin đặt xe không hợp lệ');
       return;
     }
     setConfirming(true);
     try {
-      const result = await bookingService.create(payload);
-      if (result.success) {
+      // Bước 1: tạo booking → nhận bookingId
+      const createResult = await bookingService.create(payload);
+      if (!createResult.success) {
+        showError(createResult.message || 'Đặt xe thất bại, vui lòng thử lại');
+        return;
+      }
+      // Bước 2: server xác thực OTP, nếu sai sẽ trả lỗi
+      const confirmResult = await bookingService.confirmPayment(createResult.data.id, otp);
+      if (confirmResult.success) {
         Alert.alert('Thành công', 'Đặt xe thành công! Chờ chủ xe xác nhận.', [
           { text: 'OK', onPress: () => router.replace('/(tabs)/trips') },
         ]);
       } else {
-        showError(result.message || 'Đặt xe thất bại, vui lòng thử lại');
+        showError(confirmResult.message || 'Xác nhận OTP thất bại');
       }
     } catch (err) {
       showError(err.response?.data?.message || 'Đặt xe thất bại, vui lòng thử lại');

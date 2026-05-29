@@ -9,7 +9,7 @@ export default function PointsScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    pointsService.getHistory()
+    pointsService.getPointsInfo()
       .then(res => setData(res.data?.data || { balance: 0, history: [] }))
       .catch(() => {})
       .finally(() => setLoading(false));

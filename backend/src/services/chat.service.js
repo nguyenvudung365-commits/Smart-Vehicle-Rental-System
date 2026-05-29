@@ -61,4 +61,8 @@ async function sendMessage(conversationId, senderId, content) {
   return message;
 }
 
-module.exports = { getMessages, sendMessage };
+async function getMiaReply(message) {
+  return `Xin chào! Tôi nhận được: "${message}". Vui lòng sử dụng Mia trực tiếp trên ứng dụng.`;
+}
+
+module.exports = { getMessages, sendMessage, getMiaReply };

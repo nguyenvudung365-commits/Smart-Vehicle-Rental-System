@@ -81,7 +81,8 @@ export default function KycSubmitScreen() {
     const e = { ...errors };
     switch (field) {
       case 'licenseNumber':
-        if (!value || value.length < 5) e.licenseNumber = 'Số GPLX phải có ít nhất 5 ký tự';
+        if (!value) e.licenseNumber = 'Vui lòng nhập số GPLX';
+        else if (!/^\d{12}$/.test(value)) e.licenseNumber = 'Số GPLX gồm 12 chữ số';
         else delete e.licenseNumber; break;
       case 'fullName':
         if (!value || value.length < 2) e.fullName = 'Họ tên phải có ít nhất 2 ký tự';
@@ -96,7 +97,7 @@ export default function KycSubmitScreen() {
     if (!frontImage || !backImage) {
       return showError('Cần chọn cả 2 ảnh GPLX');
     }
-    if (!licenseNumber || licenseNumber.length < 5 || !fullName || fullName.length < 2) return;
+    if (!licenseNumber || !/^\d{12}$/.test(licenseNumber) || !fullName || fullName.length < 2) return;
 
     setSubmitting(true);
     try {
