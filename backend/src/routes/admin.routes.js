@@ -1,10 +1,10 @@
 const router = require('express').Router();
-const { authenticate } = require('../middlewares/auth.middleware');
+const { authenticate, requireRole } = require('../middlewares/auth.middleware');
 const prisma = require('../config/prisma');
 const { success, error } = require('../utils/response');
 const { createVoucher, listVouchers, toggleVoucher } = require('../services/voucher.service');
 
-router.use(authenticate);
+router.use(authenticate, requireRole('admin'));
 
 router.get('/kyc', async (req, res) => {
   try {
