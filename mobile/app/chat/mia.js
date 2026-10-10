@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 
 const GEMINI_API_KEY = Constants.expoConfig?.extra?.geminiApiKey ?? '';
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 const SYSTEM_PROMPT = `Bạn là Mia, trợ lý ảo của ứng dụng Mioto Clone — ứng dụng cho thuê xe tự lái tại Việt Nam.
 Nhiệm vụ của bạn là hỗ trợ người dùng về:

@@ -32,6 +32,22 @@ const TRANSMISSION_OPTIONS = [
 ];
 
 const SEATS_OPTIONS = [4, 5, 7, 9, 16];
+const LICENSE_PLATE_PATTERN = /^\d{2}[A-Z]\d?-\d{4,5}$/;
+const LICENSE_PLATE_FORMAT_ERROR = 'Định dạng: 51A-12345 hoặc 51A1-2345';
+const LICENSE_PLATE_DUPLICATE_ERROR = 'Biển số xe đã được đăng ký';
+
+function getLicensePlateError(value) {
+  if (!value) return 'Vui lòng nhập biển số xe';
+  if (!LICENSE_PLATE_PATTERN.test(value.toUpperCase())) return LICENSE_PLATE_FORMAT_ERROR;
+  return null;
+}
+
+function isDuplicateLicensePlateError(err) {
+  const data = err.response?.data || {};
+  const code = data.error || data.code || err.code;
+  const message = `${data.message || err.message || ''}`.toLowerCase();
+  return code === 'P2002' && (message.includes('licenseplate') || message.includes('license_plate'));
+}
 
 export default function AddVehicleScreen() {
   const { loadUser } = useAuth();
@@ -90,10 +106,12 @@ export default function AddVehicleScreen() {
         else if (isNaN(value) || value < 1990 || value > 2030) e.year = 'Năm từ 1990 đến 2030';
         else delete e.year; break;
       case 'licensePlate':
-        if (!value) e.licensePlate = 'Vui lòng nhập biển số xe';
-        else if (!/^\d{2}[A-Z]\d?-\d{4,5}$/.test(value.toUpperCase()))
-          e.licensePlate = 'Định dạng: 51A-12345 hoặc 51A1-2345';
-        else delete e.licensePlate; break;
+        {
+          const plateError = getLicensePlateError(value);
+          if (plateError) e.licensePlate = plateError;
+          else delete e.licensePlate;
+          break;
+        }
       case 'pricePerDay':
         if (!value) e.pricePerDay = 'Vui lòng nhập giá thuê';
         else if (isNaN(value) || Number(value) < 100000) e.pricePerDay = 'Giá thuê tối thiểu 100.000đ';
@@ -112,8 +130,8 @@ export default function AddVehicleScreen() {
       if (!model) e.model = 'Vui lòng nhập dòng xe';
       if (!year) e.year = 'Vui lòng nhập năm sản xuất';
       else if (isNaN(year) || year < 1990 || year > 2030) e.year = 'Năm từ 1990 đến 2030';
-      if (!licensePlate) e.licensePlate = 'Vui lòng nhập biển số xe';
-      else if (!/^\d{2}[A-Z]\d?-\d{4,5}$/.test(licensePlate.toUpperCase())) e.licensePlate = 'Định dạng: 51A-12345 hoặc 51A1-2345';
+      const plateError = getLicensePlateError(licensePlate);
+      if (plateError) e.licensePlate = plateError;
       if (!pricePerDay) e.pricePerDay = 'Vui lòng nhập giá thuê';
       else if (isNaN(pricePerDay) || Number(pricePerDay) < 100000) e.pricePerDay = 'Giá thuê tối thiểu 100.000đ';
     }
@@ -209,6 +227,14 @@ export default function AddVehicleScreen() {
   }
 
   async function handleSubmit() {
+    const plateError = getLicensePlateError(licensePlate);
+    if (plateError) {
+      setErrors(prev => ({ ...prev, licensePlate: plateError }));
+      setStep(0);
+      setTimeout(() => scrollToFirstError({ licensePlate: plateError }), 50);
+      return;
+    }
+
     setSubmitting(true);
     try {
       const vehicleData = {
@@ -261,6 +287,13 @@ export default function AddVehicleScreen() {
       await loadUser();
       router.replace('/host/vehicles');
     } catch (err) {
+      if (isDuplicateLicensePlateError(err)) {
+        setErrors(prev => ({ ...prev, licensePlate: LICENSE_PLATE_DUPLICATE_ERROR }));
+        setStep(0);
+        setTimeout(() => scrollToFirstError({ licensePlate: LICENSE_PLATE_DUPLICATE_ERROR }), 50);
+        showError(LICENSE_PLATE_DUPLICATE_ERROR);
+        return;
+      }
       showError(err.response?.data?.message || 'Đăng ký xe thất bại');
     } finally {
       setSubmitting(false);
@@ -559,7 +592,7 @@ export default function AddVehicleScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         {/* Thanh tiến trình */}
         <View style={styles.stepper}>
           {STEPS.map((s, i) => (
@@ -611,7 +644,7 @@ export default function AddVehicleScreen() {
             </TouchableOpacity>
           )}
         </View>
-      </View>
+      </SafeAreaView>
       {/* Modal map picker */}
       <MapPickerModal
         visible={showMapPicker}

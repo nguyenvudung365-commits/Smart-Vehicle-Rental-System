@@ -1,4 +1,4 @@
-import api from './api';
+import api, { normalizeImageUrls } from './api';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -89,7 +89,7 @@ export const authService = {
   async getStoredUser() {
     migrateTokensIfNeeded(); // fire-and-forget, không block startup
     const userStr = await AsyncStorage.getItem('user');
-    return userStr ? JSON.parse(userStr) : null;
+    return userStr ? normalizeImageUrls(JSON.parse(userStr)) : null;
   },
 
   async isAuthenticated() {
@@ -101,6 +101,6 @@ export const authService = {
   async _saveAuthData({ user, tokens }) {
     await SecureStore.setItemAsync('accessToken', tokens.accessToken);
     await SecureStore.setItemAsync('refreshToken', tokens.refreshToken);
-    await AsyncStorage.setItem('user', JSON.stringify(user));
+    await AsyncStorage.setItem('user', JSON.stringify(normalizeImageUrls(user)));
   },
 };

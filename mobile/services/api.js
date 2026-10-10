@@ -4,7 +4,52 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 
 // Đọc URL server từ app.json → chỉ cần đổi 1 chỗ khi đổi IP/domain
-const API_URL = Constants.expoConfig?.extra?.apiUrl ?? 'http://192.168.1.9:3000/api';
+const API_URL = Constants.expoConfig?.extra?.apiUrl ?? 'http://192.168.195.230:3000/api';
+const API_ORIGIN = API_URL.replace(/\/api\/?$/, '');
+
+function getApiHost() {
+  try {
+    return new URL(API_ORIGIN).hostname;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeImageUrl(value) {
+  if (typeof value !== 'string' || !/^https?:\/\//i.test(value)) return value;
+
+  try {
+    const url = new URL(value);
+    const apiHost = getApiHost();
+    const isLocalMinioUrl = url.port === '9000'
+      && ['localhost', '127.0.0.1', '10.0.2.2'].includes(url.hostname);
+    const isLanMinioUrl = url.port === '9000'
+      && /^(10|172\.(1[6-9]|2\d|3[0-1])|192\.168)\./.test(url.hostname);
+
+    if (apiHost && (isLocalMinioUrl || isLanMinioUrl)) {
+      url.hostname = apiHost;
+      return url.toString();
+    }
+  } catch {
+    return value;
+  }
+
+  return value;
+}
+
+export function normalizeImageUrls(payload) {
+  if (Array.isArray(payload)) return payload.map(normalizeImageUrls);
+  if (!payload || typeof payload !== 'object') return normalizeImageUrl(payload);
+
+  return Object.fromEntries(
+    Object.entries(payload).map(([key, value]) => {
+      if (typeof value === 'string' && /(avatarUrl|imageUrl|coverImage|ImageUrl)$/i.test(key)) {
+        return [key, normalizeImageUrl(value)];
+      }
+      return [key, normalizeImageUrls(value)];
+    })
+  );
+}
 
 const api = axios.create({
   baseURL: API_URL,
@@ -24,7 +69,10 @@ api.interceptors.request.use(async (config) => {
 // Interceptor response: tự động xử lý khi token hết hạn
 // Người dùng không cần đăng nhập lại thủ công sau mỗi 15 phút
 api.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    res.data = normalizeImageUrls(res.data);
+    return res;
+  },
   async (err) => {
     const original = err.config;
 

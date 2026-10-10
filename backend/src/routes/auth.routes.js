@@ -1,6 +1,6 @@
 const express = require('express');
 const { authController, schemas } = require('../controllers/auth.controller');
-const { validate } = require('../middlewares/validate');
+const validate = require('../middlewares/validate');
 const { authenticate } = require('../middlewares/auth.middleware');
 const { uploadSingle } = require('../middlewares/upload');
 
